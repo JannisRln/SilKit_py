@@ -1,6 +1,6 @@
 # SilKit_py
 
-Python bindings for Vector SIL Kit, providing access to core concepts such as:
+Python bindings for [Vector SIL Kit](https://github.com/vectorgrp/sil-kit/tree/main), providing access to core concepts such as:
 
 - Participant configuration
 - Lifecycle services (coordinated and autonomous)
@@ -9,6 +9,8 @@ Python bindings for Vector SIL Kit, providing access to core concepts such as:
 - Logging
 
 Bindings are implemented with [pybind11](https://pybind11.readthedocs.io/) and integrate with `asyncio`, so you can `await` lifecycle operations and write asynchronous tests using `pytest-asyncio`.
+
+[Documentation of C++ API](https://vectorgrp.github.io/sil-kit-docs/index.html)
 
 ---
 
