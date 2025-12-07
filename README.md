@@ -125,7 +125,7 @@ cfg = m.participant_configuration_from_String(yaml_cfg)
 participant = m.create_participant(cfg, "PyParticipant", uri)
 
 # Create coordinated lifecycle and time sync
-lc_cfg = m.LifecycleConfiguration(m.OperationMode.Coordinated)
+lc_cfg = m.LifecycleConfiguration(m.OperationMode.Autonomous)
 lifecycle = participant.create_lifecycle_service(lc_cfg)
 time_sync = lifecycle.create_time_sync_service()
 
@@ -142,3 +142,24 @@ async def main():
 
 asyncio.run(main())
 ```
+
+# TODOs
+
+Missing Implementations from SilKit
+- [ ] CAN Service API
+- [ ] LIN Service API
+- [ ] FlexRay Service API
+- [ ] Ethernet Service API
+
+- [ ] RPC (Remote Procedure Call) API
+- [ ] Data Serialization/Deserialization API
+
+ILifecycleService
+- [ ] State machine handler
+
+ITimeSyncService
+- [ ] Asynchronous Step Handler
+
+- [ ] System Utilities
+
+- [ ] Custom Network Simulator
