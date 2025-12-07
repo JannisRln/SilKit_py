@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "c settings",
+            "includePath": [
+                "${workspaceFolder}\\**",
+                "${workspaceFolder}\\.venv\\Lib\\site-packages\\pybind11\\include\\**",
+                "C:\\develop\\Python\\Include"
+            ],
+            "intelliSenseMode": "msvc-x64",
+            "cStandard": "c99",
+            "cppStandard": "c++23"
+        }
+    ],
+    "version": 4
+}
