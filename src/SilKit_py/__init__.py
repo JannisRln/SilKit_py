@@ -3,6 +3,7 @@ import asyncio
 
 from ._core import ( # pyright: ignore[reportMissingImports]
     __version__,
+    ParticipantState,
     IParticipantConfiguration,
     participant_configuration_from_String,
     create_participant,
@@ -21,9 +22,10 @@ from ._core import ( # pyright: ignore[reportMissingImports]
 
 __all__ = [
     "__version__",
+    "ParticipantState"
+    "IParticipantConfiguration",
     "participant_configuration_from_String",
     "create_participant",
-    "IParticipantConfiguration",
     "IParticipant",
     "ILifecycleService",
     "OperationMode",

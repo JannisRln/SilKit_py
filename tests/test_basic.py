@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import SilKit_py as m
 import asyncio
+import threading
+
 
 simpel_yamel = \
 """
@@ -18,7 +20,7 @@ Logging:
 uri= "silkit://localhost:8501"
 
 def test_version():
-    assert m.__version__ == "1.0.0"
+    assert m.__version__ == "1.0.1"
 
 import subprocess, time
 import pytest
@@ -334,3 +336,102 @@ async def test_pub_sub_with_coordinated_lifecycle(system_controller):
 
     assert "data" in received
     assert received["data"] == b"HelloSub"
+
+def test_lifecycle_state_callable():
+    cfg = m.participant_configuration_from_String(simpel_yamel)
+    participant = m.create_participant(cfg, "StateOnlyTest", uri)
+
+    lifecycle_cfg = m.LifecycleConfiguration(m.OperationMode.Autonomous)
+    lifecycle = participant.create_lifecycle_service(lifecycle_cfg)
+
+    state = lifecycle.state()
+
+    assert isinstance(state, m.ParticipantState)
+
+
+@pytest.fixture
+def single_participant_controller(silkit_registry):
+    proc = subprocess.Popen([
+        "./build-silkit/Release/sil-kit-system-controller.exe",
+        "AsyncNonBlockingTest",
+        "-u", uri,
+        "-l", "Off"
+    ],
+    stdout=None,
+    stderr=None)
+
+    time.sleep(0.3)
+    yield
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+import time
+import threading
+import asyncio
+import pytest
+import SilKit_py as m
+
+
+@pytest.mark.asyncio
+async def test_set_communication_ready_handler_async_and_complete(single_participant_controller):
+    cfg = m.participant_configuration_from_String(simpel_yamel)
+    participant = m.create_participant(cfg, "AsyncNonBlockingTest", uri)
+
+    lifecycle_cfg = m.LifecycleConfiguration(m.OperationMode.Coordinated)
+    lifecycle = participant.create_lifecycle_service(lifecycle_cfg)
+    time_service = lifecycle.create_time_sync_service()
+
+    loop = asyncio.get_running_loop()
+    ready_called = asyncio.Event()
+    step_called = asyncio.Event()
+
+    seq = []
+    seq_lock = threading.Lock()
+
+    def comm_ready_handler():
+        with seq_lock:
+            seq.append("handler")
+
+        # signal "handler called" to the test
+        loop.call_soon_threadsafe(ready_called.set)
+
+        # simulate async work, then complete
+        def complete_later():
+            time.sleep(0.05)
+            with seq_lock:
+                seq.append("complete")
+            lifecycle.complete_communication_ready_handler_async()
+
+        threading.Thread(target=complete_later, daemon=True).start()
+
+    lifecycle.set_communication_ready_handler_async(comm_ready_handler)
+
+    def step_handler(now, duration):
+        with seq_lock:
+            seq.append("step")
+        loop.call_soon_threadsafe(step_called.set)
+        lifecycle.stop("done")
+
+    time_service.set_simulation_step_handler(step_handler, int(1_000_000))
+
+    await asyncio.wait_for(
+        asyncio.gather(
+            lifecycle.start_lifecycle(),
+            ready_called.wait(),
+            step_called.wait(),
+        ),
+        timeout=3.0,
+    )
+
+    with seq_lock:
+        assert "handler" in seq
+        assert "complete" in seq
+        assert "step" in seq
+        # step must not happen before completion
+        assert seq.index("complete") < seq.index("step")
+
