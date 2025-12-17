@@ -67,7 +67,7 @@ Build the wheel and install it into the virtual environment:
 ```bash
 .venv\Scripts\pip.exe install build ^
 && .venv\Scripts\python.exe -m build --wheel ^
-&& .venv\Scripts\pip.exe install .\dist\silkit_py-1.0.1-cp312-cp312-win_amd64.whl --force-reinstall
+&& .venv\Scripts\pip.exe install .\dist\silkit_py-1.0.2-cp312-cp312-win_amd64.whl --force-reinstall
 ```
 
 Adjust the wheel file name if you change the version or Python build.
@@ -148,7 +148,7 @@ asyncio.run(main())
 # TODOs
 
 Missing Implementations from SilKit
-- [ ] CAN Service API
+- [X] CAN Service API (not complete)
 - [ ] LIN Service API
 - [ ] FlexRay Service API
 - [ ] Ethernet Service API

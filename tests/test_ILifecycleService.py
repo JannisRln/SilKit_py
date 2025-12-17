@@ -5,29 +5,8 @@ import asyncio
 import threading
 import subprocess, time
 import pytest
-from common import simpel_yamel, uri
+from common import simpel_yamel, uri, silkit_registry
 
-
-@pytest.fixture(scope="session", autouse=True)
-def silkit_registry():
-
-    global uri
-
-    proc = subprocess.Popen([
-        "./build-silkit/Release/sil-kit-registry.exe",
-        "--listen-uri", uri,
-        "-l", "Off"
-    ],
-    stdout=None,
-    stderr=None)
-    time.sleep(0.5)  # wait for registry to start
-    yield
-    proc.terminate()
-    try:
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
 
 def test_callable_of_create_lifecycle_service():
 
@@ -246,9 +225,7 @@ def single_participant_controller(silkit_registry):
         "AsyncNonBlockingTest",
         "-u", uri,
         "-l", "Off"
-    ],
-    stdout=None,
-    stderr=None)
+    ])
 
     time.sleep(0.3)
     yield

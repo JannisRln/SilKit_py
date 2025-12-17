@@ -4,6 +4,7 @@
 
 #include "silkit/SilKit.hpp"
 
+#include "ICanController.hpp"
 #include "ILifecycleService.hpp"
 #include "PubSub.hpp"
 
@@ -114,9 +115,10 @@ PYBIND11_MODULE(_core, m) {
             py::arg("level"),
             py::arg("msg"));
 
+    bind_ICanController( m );
+
     bind_ILifecycleService( m );
 
     bind_PubSub( m );
-
 
 }

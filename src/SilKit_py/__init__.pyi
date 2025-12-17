@@ -1,8 +1,8 @@
 # Auto-generated type stub for SilKit Python Wrapper
 
-from typing import Optional, Awaitable, Callable, List, overload
+from typing import Optional, Awaitable, Callable, List, overload, TypeAlias, Any
 from enum import Enum
-
+import enum
 # Version attribute
 __version__: str
 
@@ -43,6 +43,8 @@ class IParticipant:
     """SilKit participant"""
     def create_lifecycle_service(self, lifecycle_service_config: LifecycleConfiguration) -> ILifecycleService:
         """Create a SilKit::Services::Orchestration::ILifecycleService"""
+        ...
+    def create_can_controller(self, canonical_name:str, network_name:str) -> ICanController:
         ...
     def create_data_publisher(
         self,
@@ -154,3 +156,103 @@ class ILogger:
     """SilKit::Services::Logging::ILogge"""
     def log(self, level:LogLevel, msg:str)-> None:
         ...
+
+
+
+HandlerId: TypeAlias = int
+DirectionMask: TypeAlias = int
+CanFrameFlagMask: TypeAlias = int
+CanTransmitStatusMask: TypeAlias = int
+
+
+class CanFrame:
+    can_id: int          # uint32_t canId :contentReference[oaicite:0]{index=0}
+    flags: int           # CanFrameFlagMask flags :contentReference[oaicite:1]{index=1}
+    dlc: int             # uint16_t dlc :contentReference[oaicite:2]{index=2}
+    sdt: int             # uint8_t sdt :contentReference[oaicite:3]{index=3}
+    vcid: int            # uint8_t vcid :contentReference[oaicite:4]{index=4}
+    af: int              # uint32_t af :contentReference[oaicite:5]{index=5}
+
+    def __init__(self) -> None: ...
+    @property
+    def data(self) -> bytes: ...
+    @data.setter
+    def data(self, b: bytes) -> None: ...
+
+class TransmitDirection(enum.IntFlag):
+    Undefined: TransmitDirection
+    RX: TransmitDirection
+    TX: TransmitDirection
+    TXRX: TransmitDirection
+# enum class SilKit::Services::TransmitDirection : uint8_t :contentReference[oaicite:6]{index=6}
+
+
+class CanControllerState(enum.IntEnum):
+    Uninit: CanControllerState
+    Stopped: CanControllerState
+    Started: CanControllerState
+    Sleep: CanControllerState
+# :contentReference[oaicite:7]{index=7}
+
+
+class CanErrorState(enum.IntEnum):
+    NotAvailable: CanErrorState
+    ErrorActive: CanErrorState
+    ErrorPassive: CanErrorState
+    BusOff: CanErrorState
+# :contentReference[oaicite:8]{index=8}
+
+
+class CanFrameFlag(enum.IntFlag):
+    Ide: CanFrameFlag
+    Rtr: CanFrameFlag
+    Fdf: CanFrameFlag
+    Brs: CanFrameFlag
+    Esi: CanFrameFlag
+    Xlf: CanFrameFlag
+    Sec: CanFrameFlag
+# :contentReference[oaicite:9]{index=9}
+
+
+class CanTransmitStatus(enum.IntFlag):
+    Transmitted: CanTransmitStatus
+    Canceled: CanTransmitStatus
+    TransmitQueueFull: CanTransmitStatus
+# :contentReference[oaicite:10]{index=10}
+
+
+CanTransmitStatus_DefaultMask: int
+
+
+class CanFrameEvent:
+    timestamp: int          # std::chrono::nanoseconds :contentReference[oaicite:11]{index=11}
+    frame: CanFrame         # :contentReference[oaicite:12]{index=12}
+    direction: TransmitDirection  # :contentReference[oaicite:13]{index=13}
+    userContext: int        # void* :contentReference[oaicite:14]{index=14}
+
+
+class ICanController:
+    def set_baud_rate(self, rate: int, fd_rate: int, xl_rate: int) -> None: ...
+    def reset(self) -> None: ...
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def sleep(self) -> None: ...
+
+    def send_frame(
+        self,
+        can_id: int,
+        data: bytes,
+        flags: int = 0,
+        dlc: Optional[int] = ...,
+        sdt: int = 0,
+        vcid: int = 0,
+        af: int = 0,
+        user_context: int = 0,
+    ) -> None: ...
+
+    def add_frame_handler(
+        self,
+        handler: Callable[[ICanController, CanFrameEvent], Any],
+        direction_mask: DirectionMask = ...,
+    ) -> HandlerId: ...
+# CAN controller concepts and data structures :contentReference[oaicite:15]{index=15}

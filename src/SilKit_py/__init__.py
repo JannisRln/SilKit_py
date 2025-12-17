@@ -17,7 +17,15 @@ from ._core import ( # pyright: ignore[reportMissingImports]
     IDataSubscriber,
     DataMessageEvent,
     LogLevel,
-    ILogger
+    ILogger,
+    ICanController,
+    CanTransmitStatus,
+    CanFrameFlag,
+    CanErrorState,
+    CanControllerState,
+    TransmitDirection,
+    CanFrame
+
 )
 
 __all__ = [
@@ -35,6 +43,13 @@ __all__ = [
     "IDataPublisher",
     "IDataSubscriber",
     "DataMessageEvent",
-    "LogLevel"
-    "ILogger"
+    "LogLevel",
+    "ILogger",
+    "ICanController",
+    "CanTransmitStatus",
+    "CanFrameFlag",
+    "CanErrorState",
+    "CanControllerState",
+    "TransmitDirection",
+    "CanFrame"
 ]
