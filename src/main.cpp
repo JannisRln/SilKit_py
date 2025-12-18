@@ -82,7 +82,12 @@ PYBIND11_MODULE(_core, m) {
                     {
                         py::gil_scoped_acquire gil;
 
-                        pyHandler(sub, evt);
+                        try {
+                            pyHandler(sub, evt);
+                        }
+                        catch (const py::error_already_set& e) {
+                            PyErr_WriteUnraisable(e.value().ptr());
+                        }
                     };
 
                 auto* subscriber =
@@ -96,6 +101,73 @@ PYBIND11_MODULE(_core, m) {
             py::return_value_policy::reference,
             py::keep_alive<0, 3>()
         )
+        .def("create_rpc_client",
+            []( SilKit::IParticipant* self,
+                const std::string& canonicalName,
+                const SilKit::Services::Rpc::RpcSpec& dataSpec,
+                py::function pyHandler)
+            {
+                std::cout << "create_rpc_client" << std::endl;
+                SilKit::Services::Rpc::RpcCallResultHandler  handler =
+                    [pyHandler](SilKit::Services::Rpc::IRpcClient* client,
+                                const SilKit::Services::Rpc::RpcCallResultEvent& evt)
+                    {
+                        py::gil_scoped_acquire gil;
+                        std::cout << "call IRpcClient.RpcCallResultHandler" << std::endl;
+
+                        try {
+                            pyHandler(client, evt);
+                        }
+                        catch (const py::error_already_set& e) {
+                            std::cout << "Error: IRpcClient.RpcCallResultHandler" << std::endl;
+                            PyErr_WriteUnraisable(e.value().ptr());
+                        }
+                        std::cout << "call IRpcClient.RpcCallResultHandler finished" << std::endl;
+                    };
+
+                auto* client = self->CreateRpcClient(canonicalName, dataSpec, std::move(handler) );
+
+                return client;
+            },
+            py::arg("canonical_name"),
+            py::arg("data_spec"),
+            py::arg("handler"),
+            py::return_value_policy::reference,
+            py::keep_alive<0, 3>()
+        )
+        .def("create_rpc_server",
+            []( SilKit::IParticipant* self,
+                const std::string& canonicalName,
+                const SilKit::Services::Rpc::RpcSpec& dataSpec,
+                py::function pyHandler)
+            {
+                std::cout << "create_rpc_server" << std::endl;
+                SilKit::Services::Rpc::RpcCallHandler handler =
+                    [pyHandler](SilKit::Services::Rpc::IRpcServer* server,
+                                const SilKit::Services::Rpc::RpcCallEvent& evt)
+                    {
+                        py::gil_scoped_acquire gil;
+                        std::cout << "call create_rpc_server.RpcCallHandler" << std::endl;
+                        try {
+                            pyHandler(server, evt);
+                        }
+                        catch (const py::error_already_set& e) {
+                            std::cout << "Error: create_rpc_server.RpcCallHandler" << std::endl;
+                            PyErr_WriteUnraisable(e.value().ptr());
+                        }
+                        std::cout << "call create_rpc_server.RpcCallHandler finished" << std::endl;
+                    };
+
+                auto* server = self->CreateRpcServer(canonicalName, dataSpec, std::move(handler) );
+
+                return server;
+            },
+            py::arg("canonical_name"),
+            py::arg("data_spec"),
+            py::arg("handler"),
+            py::return_value_policy::reference,
+            py::keep_alive<0, 3>()
+            )
         .def("get_logger", 
              &SilKit::IParticipant::GetLogger,
              py::return_value_policy::reference);
@@ -120,5 +192,9 @@ PYBIND11_MODULE(_core, m) {
     bind_ILifecycleService( m );
 
     bind_PubSub( m );
+
+    bind_Rpc( m );
+
+    bind_MatchingLabel( m );
 
 }

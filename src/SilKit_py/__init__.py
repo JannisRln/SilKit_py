@@ -24,8 +24,17 @@ from ._core import ( # pyright: ignore[reportMissingImports]
     CanErrorState,
     CanControllerState,
     TransmitDirection,
-    CanFrame
-
+    CanFrame,
+    MatchingLabelKind,
+    MatchingLabel,
+    RpcCallStatus,
+    RpcSpec,
+    RpcCallResultEvent,
+    RpcCallEvent,
+    IRpcClient,
+    IRpcServer,
+    media_type_data,
+    media_type_rpc
 )
 
 __all__ = [
@@ -51,5 +60,15 @@ __all__ = [
     "CanErrorState",
     "CanControllerState",
     "TransmitDirection",
-    "CanFrame"
+    "CanFrame",
+    "RpcCallStatus2",
+    "RpcSpec2",
+    "RpcCallResultEvent2",
+    "RpcCallEvent2",
+    "IRpcClient2",
+    "IRpcServer2",
+    "MatchingLabelKind",
+    "MatchingLabel",
+    "media_type_data",
+    "media_type_rpc"
 ]

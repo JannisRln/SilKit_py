@@ -237,13 +237,6 @@ def single_participant_controller(silkit_registry):
         proc.kill()
         proc.wait()
 
-import time
-import threading
-import asyncio
-import pytest
-import SilKit_py as m
-
-
 @pytest.mark.asyncio
 async def test_set_communication_ready_handler_async_and_complete(single_participant_controller):
     cfg = m.participant_configuration_from_String(simpel_yamel)

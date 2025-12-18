@@ -20,7 +20,7 @@ Logging:
 
 uri= "silkit://localhost:8501"
 
-Dashboard_active = False
+Dashboard_active = True
 
 @pytest.fixture(scope="session", autouse=True)
 def silkit_registry():

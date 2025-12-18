@@ -1,6 +1,6 @@
 # Auto-generated type stub for SilKit Python Wrapper
 
-from typing import Optional, Awaitable, Callable, List, overload, TypeAlias, Any
+from typing import Optional, Awaitable, Callable, List, overload, TypeAlias, Any, Sequence
 from enum import Enum
 import enum
 # Version attribute
@@ -38,6 +38,8 @@ def create_participant(
 
 
 DataMessageHandler = Callable[[IDataSubscriber, DataMessageEvent], None]
+RpcCallResultHandler = Callable[[IRpcClient, RpcCallResultEvent], None]
+RpcCallHandler = Callable[[IRpcServer, RpcCallEvent], None]
 
 class IParticipant:
     """SilKit participant"""
@@ -58,6 +60,18 @@ class IParticipant:
         data_spec: PubSubSpec,
         data_message_handler: DataMessageHandler,
     ) -> IDataSubscriber: ...
+    def create_rpc_client(
+        self,
+        canonical_name: str,
+        data_spec: RpcSpec,
+        handler: RpcCallResultHandler
+    ) -> IRpcClient: ...
+    def create_rpc_server(
+        self,
+        canonical_name: str,
+        data_spec: RpcSpec,
+        handler: RpcCallHandler
+    ) -> IRpcServer: ...
     def get_logger(self)-> ILogger:
         ...
 
@@ -106,14 +120,6 @@ class ITimeSyncService:
         """
         ...
 
-class MatchingLabel:
-    class Kind(Enum):
-        Optional = 0
-        Required = 1
-
-    key: str
-    value: str
-    kind: Kind
 
 class IDataPublisher:
     # Methods not shown; add as needed
@@ -134,7 +140,7 @@ class PubSubSpec:
     @overload
     def add_label(self, label: MatchingLabel) -> None: ...
     @overload
-    def add_label(self, key: str, value: str, kind: MatchingLabel.Kind) -> None: ...
+    def add_label(self, key: str, value: str, kind: MatchingLabelKind) -> None: ...
 
     @property
     def topic(self) -> str: ...
@@ -256,3 +262,103 @@ class ICanController:
         direction_mask: DirectionMask = ...,
     ) -> HandlerId: ...
 # CAN controller concepts and data structures :contentReference[oaicite:15]{index=15}
+
+class RpcCallStatus(enum.IntFlag):
+    Success: RpcCallStatus
+    ServerNotReachable: RpcCallStatus
+    UndefinedError: RpcCallStatus
+    InternalServerError: RpcCallStatus
+    Timeout: RpcCallStatus
+
+class RpcSpec:
+    @overload
+    def __init__(self) -> None: ...
+    @overload
+    def __init__(self, function_name: str, mediaType: str) -> None: ...
+
+    @overload
+    def add_label(self, label: MatchingLabel) -> None: ...
+    @overload
+    def add_label(self, key: str, value: str, kind:  MatchingLabelKind) -> None: ...
+
+    @property
+    def function_name(self) -> str: ...
+
+    @property
+    def media_type(self) -> str: ...
+
+    @property
+    def labels(self) -> Sequence[MatchingLabel]: ...
+
+
+class RpcCallResultEvent:
+    @property
+    def timestamp_ns(self) -> int: ...
+
+    @property
+    def user_context(self) -> int: ...
+
+    call_status: int
+
+    @property
+    def result_data(self) -> bytes: ...
+
+
+class RpcCallEvent:
+    @property
+    def timestamp_ns(self) -> int: ...
+
+    @property
+    def call_handle(self) -> int: ...
+
+    @property
+    def argument_data(self) -> bytes: ...
+
+
+class IRpcClient:
+    def call(self, data: bytes, user_context: Optional[int] = ...) -> None: ...
+
+    def call_with_timeout(
+        self,
+        data: bytes,
+        timeout_ns: int,
+        user_context: Optional[int] = ...,
+    ) -> None: ...
+
+    def set_call_result_handler(
+        self,
+        handler: Callable[["IRpcClient", RpcCallResultEvent], None],
+    ) -> None: ...
+
+
+class IRpcServer:
+    def submit_result(self, call_handle: int, result_data: bytes) -> None: ...
+
+    def set_call_handler(
+        self,
+        handler: Callable[["IRpcServer", RpcCallEvent], None],
+    ) -> None: ...
+
+class MatchingLabelKind(Enum):
+    Optional = 1
+    Mandatory = 2
+
+
+class MatchingLabel:
+    key: str
+    value: str
+    kind: MatchingLabelKind
+
+    @overload
+    def __init__(self) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        key: str,
+        value: str,
+        kind: MatchingLabelKind = MatchingLabelKind.Optional,
+    ) -> None: ...
+
+def media_type_data()->str:...
+def media_type_rpc()->str:...

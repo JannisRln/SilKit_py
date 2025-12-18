@@ -9,7 +9,7 @@ import pytest
 from common import simpel_yamel, uri
 
 def test_version():
-    assert m.__version__ == "1.0.2"
+    assert m.__version__ == "1.0.3"
 
 def test_participant_configuration_from_String_is_callable():
     assert callable(m.participant_configuration_from_String)
