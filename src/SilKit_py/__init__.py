@@ -1,5 +1,4 @@
 from __future__ import annotations
-import asyncio
 
 from ._core import ( # pyright: ignore[reportMissingImports]
     __version__,
@@ -25,6 +24,8 @@ from ._core import ( # pyright: ignore[reportMissingImports]
     CanControllerState,
     TransmitDirection,
     CanFrame,
+    CanFrameEvent,
+    CanTransmitStatus_DefaultMask,
     MatchingLabelKind,
     MatchingLabel,
     RpcCallStatus,
@@ -39,7 +40,7 @@ from ._core import ( # pyright: ignore[reportMissingImports]
 
 __all__ = [
     "__version__",
-    "ParticipantState"
+    "ParticipantState",
     "IParticipantConfiguration",
     "participant_configuration_from_String",
     "create_participant",
@@ -61,12 +62,14 @@ __all__ = [
     "CanControllerState",
     "TransmitDirection",
     "CanFrame",
-    "RpcCallStatus2",
-    "RpcSpec2",
-    "RpcCallResultEvent2",
-    "RpcCallEvent2",
-    "IRpcClient2",
-    "IRpcServer2",
+    "CanFrameEvent",
+    "CanTransmitStatus_DefaultMask",
+    "RpcCallStatus",
+    "RpcSpec",
+    "RpcCallResultEvent",
+    "RpcCallEvent",
+    "IRpcClient",
+    "IRpcServer",
     "MatchingLabelKind",
     "MatchingLabel",
     "media_type_data",

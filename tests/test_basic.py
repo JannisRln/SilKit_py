@@ -6,7 +6,10 @@ import threading
 import subprocess, time
 import pytest
 
+
 from common import simpel_yamel, uri
+
+pytestmark = pytest.mark.usefixtures("silkit_registry")
 
 def test_version():
     assert m.__version__ == "1.0.3"

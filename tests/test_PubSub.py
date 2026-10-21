@@ -6,7 +6,10 @@ import threading
 import subprocess, time
 import pytest
 
-from common import simpel_yamel, uri, silkit_registry
+
+from common import simpel_yamel, uri, silkit_executable
+
+pytestmark = pytest.mark.usefixtures("silkit_registry")
 
 
 def _create_participant(name: str):
@@ -186,7 +189,7 @@ def test_rpc_client_call_argument_types():
 @pytest.fixture
 def Rpc_test_controller(silkit_registry):
     proc = subprocess.Popen([
-        "./build-silkit/Release/sil-kit-system-controller.exe",
+        silkit_executable("sil-kit-system-controller"),
         "RpcClient",
         "RpcServer",
         "-u", uri,

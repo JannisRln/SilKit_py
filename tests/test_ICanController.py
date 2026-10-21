@@ -4,9 +4,12 @@ import time
 import threading
 import pytest
 
+
 import SilKit_py as m
 
-from common import simpel_yamel, uri, silkit_registry
+from common import simpel_yamel, uri, silkit_executable
+
+pytestmark = pytest.mark.usefixtures("silkit_registry")
 
 @pytest.fixture
 def can_env(silkit_registry, request):
@@ -15,7 +18,7 @@ def can_env(silkit_registry, request):
     sub_name = f"CanSub_{request.node.name}"
 
     proc = subprocess.Popen([
-        "./build-silkit/Release/sil-kit-system-controller.exe",
+        silkit_executable("sil-kit-system-controller"),
         pub_name,
         sub_name,
         "-u", uri,
@@ -84,15 +87,34 @@ def test_can_controller_created(can_env):
 
 
 @pytest.mark.asyncio
-async def test_can_frame_receive_handler(can_env):
+@pytest.mark.parametrize("length,format_name,expected_dlc,explicit_dlc", [
+    (0, "classic", 0, None),
+    (4, "classic", 4, None),
+    (8, "classic", 8, None),
+    (8, "classic", 15, 15),  # Explicit wire DLC remains caller-controlled.
+    *[(size, "fd", dlc, None) for dlc, size in enumerate(
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64])],
+    (1, "xl", 0, None),
+    (64, "xl", 63, None),
+    (2048, "xl", 2047, None),
+])
+async def test_can_frame_receive_handler(can_env, length, format_name, expected_dlc, explicit_dlc):
     loop = asyncio.get_running_loop()
     rx_event = asyncio.Event()
     received = {}
+    payload = bytes(i % 256 for i in range(length))
+    flags = 0
+    if format_name in ("fd", "xl"):
+        flags |= int(m.CanFrameFlag.Fdf)
+    if format_name == "xl":
+        flags |= int(m.CanFrameFlag.Xlf)
 
     def on_frame(ctrl, evt):
         print("on_frame")
         received["can_id"] = evt.frame.can_id
         received["data"] = bytes(evt.frame.data)
+        received["timestamp"] = evt.timestamp
+        received["dlc"] = evt.frame.dlc
         loop.call_soon_threadsafe(rx_event.set)
         can_env["pub_lc"].stop("done")
         can_env["sub_lc"].stop("done")
@@ -107,9 +129,9 @@ async def test_can_frame_receive_handler(can_env):
 
         can_env["pub_can"].send_frame(
             0x123,
-            b"\x01\x02\x03\x04",
-            0,      # flags
-            None,   # dlc
+            payload,
+            flags,
+            explicit_dlc,
             0, 0, 0,
             0,      # user_context
         )
@@ -141,4 +163,25 @@ async def test_can_frame_receive_handler(can_env):
     )
 
     assert received["can_id"] == 0x123
-    assert received["data"] == b"\x01\x02\x03\x04"
+    assert received["data"] == payload
+    assert received["dlc"] == expected_dlc
+    assert isinstance(received["timestamp"], int)
+    assert received["timestamp"] >= 0
+
+
+@pytest.mark.parametrize("length,format_name", [
+    (9, "classic"), (65, "classic"),
+    (9, "fd"), (11, "fd"), (13, "fd"), (65, "fd"),
+    (0, "xl"), (2049, "xl"),
+])
+def test_invalid_automatic_dlc(length, format_name):
+    cfg = m.participant_configuration_from_String(simpel_yamel)
+    participant = m.create_participant(cfg, f"InvalidDlc_{format_name}_{length}", uri)
+    controller = participant.create_can_controller("CAN", "CAN1")
+    flags = 0
+    if format_name in ("fd", "xl"):
+        flags |= int(m.CanFrameFlag.Fdf)
+    if format_name == "xl":
+        flags |= int(m.CanFrameFlag.Xlf)
+    with pytest.raises(ValueError, match="payload"):
+        controller.send_frame(0x123, bytes(length), flags)

@@ -1,6 +1,9 @@
 #pragma once
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
+#include <cstring>
+#include <vector>
+#include "CanDlc.hpp"
 #include "silkit/SilKit.hpp"
 
 namespace py = pybind11;
@@ -46,6 +49,8 @@ void bind_ICanController(py::module_ &m)
 
     py::class_<SilKit::Services::Can::CanFrame>(m, "CanFrame")
     .def_readonly("can_id", &SilKit::Services::Can::CanFrame::canId)
+    .def_readonly("flags", &SilKit::Services::Can::CanFrame::flags)
+    .def_readonly("dlc", &SilKit::Services::Can::CanFrame::dlc)
     .def_property_readonly("data",
         [](const SilKit::Services::Can::CanFrame& f) {
             return py::bytes(
@@ -54,7 +59,9 @@ void bind_ICanController(py::module_ &m)
         });
 
     py::class_<SilKit::Services::Can::CanFrameEvent>(m, "CanFrameEvent")
-        .def_readonly("timestamp", &SilKit::Services::Can::CanFrameEvent::timestamp)
+        .def_property_readonly("timestamp", [](const SilKit::Services::Can::CanFrameEvent& event) {
+            return event.timestamp.count();
+        }, "Timestamp in nanoseconds")
         .def_readonly("frame", &SilKit::Services::Can::CanFrameEvent::frame)
         .def_readonly("direction", &SilKit::Services::Can::CanFrameEvent::direction)
         .def_readonly("user_context", &SilKit::Services::Can::CanFrameEvent::userContext);
@@ -85,7 +92,8 @@ void bind_ICanController(py::module_ &m)
                 }
 
                 std::vector<uint8_t> data(static_cast<size_t>(info.size));
-                std::memcpy(data.data(), info.ptr, data.size());
+                if (!data.empty())
+                    std::memcpy(data.data(), info.ptr, data.size());
 
                 SilKit::Services::Can::CanFrame frame{};
                 frame.canId = can_id;
@@ -96,11 +104,17 @@ void bind_ICanController(py::module_ &m)
                 frame.dataField = SilKit::Util::Span<const uint8_t>(data.data(), data.size());
 
                 if (py_dlc.is_none())
-                    frame.dlc = static_cast<uint16_t>(data.size());
+                    frame.dlc = SilKitPy::InferCanDlc(
+                        data.size(),
+                        (flags & static_cast<uint32_t>(SilKit::Services::Can::CanFrameFlag::Fdf)) != 0,
+                        (flags & static_cast<uint32_t>(SilKit::Services::Can::CanFrameFlag::Xlf)) != 0);
                 else
                     frame.dlc = py_dlc.cast<uint16_t>();
 
-                self.SendFrame(frame, reinterpret_cast<void*>(user_context));
+                {
+                    py::gil_scoped_release release;
+                    self.SendFrame(frame, reinterpret_cast<void*>(user_context));
+                }
             },
             py::arg("can_id"),
             py::arg("data"),

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import SilKit_py as m
-import asyncio
-import threading
-import subprocess, time
+import os
+from pathlib import Path
+import socket
+import subprocess
+import sys
+import time
+from urllib.parse import urlparse
 import pytest
 
 simpel_yamel = \
@@ -20,15 +23,33 @@ Logging:
 
 uri= "silkit://localhost:8501"
 
-Dashboard_active = True
+Dashboard_active = False
 
-@pytest.fixture(scope="session", autouse=True)
+
+def silkit_executable(name: str) -> str:
+    """Resolve a native SIL Kit tool independently of the working directory.
+
+    SILKIT_BIN_DIR can point to a separately built or installed tool directory.
+    """
+    default_dir = Path(__file__).resolve().parents[1] / "build-silkit" / "Release"
+    binary_dir = Path(os.environ.get("SILKIT_BIN_DIR", default_dir)).resolve()
+    suffix = ".exe" if sys.platform == "win32" else ""
+    executable = binary_dir / (name + suffix)
+    if not executable.is_file():
+        raise FileNotFoundError(
+            f"SIL Kit tool not found: {executable}. Build SIL Kit with utilities "
+            "enabled or set SILKIT_BIN_DIR."
+        )
+    return str(executable)
+
+
+@pytest.fixture
 def silkit_registry():
 
     global uri
 
     cmd = [
-        "./build-silkit/Release/sil-kit-registry.exe",
+        silkit_executable("sil-kit-registry"),
         "--listen-uri", uri,
         "-l", "Off",
     ]
@@ -41,11 +62,24 @@ def silkit_registry():
 
     proc = subprocess.Popen(cmd)
 
-    time.sleep(0.5)  # wait for registry to start
-    yield
-    proc.terminate()
     try:
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
+        address = urlparse(uri)
+        deadline = time.monotonic() + 10
+        while True:
+            if proc.poll() is not None:
+                raise RuntimeError(f"SIL Kit registry exited with code {proc.returncode}")
+            try:
+                with socket.create_connection((address.hostname, address.port), timeout=0.2):
+                    break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"SIL Kit registry did not start at {uri}")
+                time.sleep(0.05)
+        yield
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
