@@ -36,14 +36,29 @@ if (WIN32)
 else()
     set(SILKIT_LIBRARY_PATH "${SILKIT_BUILD_DIR}/Release/${CMAKE_SHARED_LIBRARY_PREFIX}SilKit${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
+set(SILKIT_REGISTRY_PATH "${SILKIT_BUILD_DIR}/Release/sil-kit-registry${CMAKE_EXECUTABLE_SUFFIX}")
+set(SILKIT_SYSTEM_CONTROLLER_PATH "${SILKIT_BUILD_DIR}/Release/sil-kit-system-controller${CMAKE_EXECUTABLE_SUFFIX}")
+set(SILKIT_MONITOR_PATH "${SILKIT_BUILD_DIR}/Release/sil-kit-monitor${CMAKE_EXECUTABLE_SUFFIX}")
 
 set(SILKIT_CXX_FLAGS)
 if (MSVC)
     list(APPEND SILKIT_CXX_FLAGS "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} /FS")
 endif()
 
-if (NOT EXISTS "${SILKIT_LIBRARY_PATH}")
-    message(STATUS "SilKit not found. Automatically building SilKit...")
+# The utilities are copied into the package's bin/ directory.  Keep their
+# runtime search path relative to their own location so that they can find the
+# duplicate runtime library after the wheel is installed.
+if (APPLE)
+    set(SILKIT_BUILD_RPATH "@loader_path")
+elseif (UNIX)
+    set(SILKIT_BUILD_RPATH "$ORIGIN")
+endif()
+
+if (NOT EXISTS "${SILKIT_LIBRARY_PATH}"
+    OR NOT EXISTS "${SILKIT_REGISTRY_PATH}"
+    OR NOT EXISTS "${SILKIT_SYSTEM_CONTROLLER_PATH}"
+    OR NOT EXISTS "${SILKIT_MONITOR_PATH}")
+    message(STATUS "SIL Kit runtime or utilities not found. Automatically building SIL Kit...")
 
     ExternalProject_Add(SilKitExternal
         SOURCE_DIR        ${SILKIT_SOURCE_DIR}
@@ -55,6 +70,7 @@ if (NOT EXISTS "${SILKIT_LIBRARY_PATH}")
             -DSILKIT_BUILD_DEMOS=OFF
             -DSILKIT_INSTALL_SOURCE=OFF
             -DSILKIT_BUILD_UTILITIES=ON #Needed for unittest 
+            -DCMAKE_BUILD_RPATH=${SILKIT_BUILD_RPATH}
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
             -DCMAKE_BUILD_TYPE=Release
             -S ${SILKIT_SOURCE_DIR}
@@ -107,13 +123,24 @@ endif()
 # Install the Python extension
 install(TARGETS _core DESTINATION SilKit_py)
 
-# Install SilKit runtime libraries (the only files needed at runtime)
-if (WIN32)
+# Install the runtime beside the extension module.  The utilities receive a
+# second copy in bin/, because native loaders search the executable directory
+# before the parent Python package directory on both Windows and Linux.
+install(FILES "${SILKIT_LIBRARY_PATH}" DESTINATION SilKit_py)
+install(FILES "${SILKIT_LIBRARY_PATH}" DESTINATION SilKit_py/bin)
+
+# Ship the utilities that make a Python-only installation self-contained.
+# CMAKE_EXECUTABLE_SUFFIX is .exe on Windows and empty on Linux.
+foreach(SILKIT_TOOL sil-kit-registry sil-kit-system-controller sil-kit-monitor)
     install(
-        DIRECTORY "${SILKIT_BUILD_DIR}/Release/"
-        DESTINATION SilKit_py
-        FILES_MATCHING PATTERN "*.dll"
+        PROGRAMS "${SILKIT_BUILD_DIR}/Release/${SILKIT_TOOL}${CMAKE_EXECUTABLE_SUFFIX}"
+        DESTINATION SilKit_py/bin
     )
-else()
-    install(FILES "${SILKIT_LIBRARY_PATH}" DESTINATION SilKit_py)
-endif()
+endforeach()
+
+# Preserve SIL Kit's and its third-party notices in the binary distribution.
+install(FILES
+    "${SILKIT_SOURCE_DIR}/LICENSE"
+    "${SILKIT_SOURCE_DIR}/ThirdParty/LICENSES.rst"
+    DESTINATION SilKit_py/licenses
+)

@@ -1,11 +1,11 @@
-name: PyPI source distribution
+name: Build and Publish to PyPI
 
 on:
   workflow_dispatch:
   pull_request:
   push:
     branches:
-      - master
+      - main
   release:
     types: [published]
 
@@ -16,62 +16,158 @@ jobs:
   build_sdist:
     name: Build SDist
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
+          persist-credentials: false
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - name: Install packaging tools
-        run: python -m pip install build twine
+        run: python -m pip install --upgrade build twine
+
       - name: Build source distribution
         run: python -m build --sdist
+
       - name: Check metadata
         run: python -m twine check dist/*
-      - uses: actions/upload-artifact@v5
+
+      - name: Upload SDist
+        uses: actions/upload-artifact@v5
         with:
           name: pypi-sdist
           path: dist/*.tar.gz
           if-no-files-found: error
 
   test_sdist:
-    name: Install SDist on ${{ matrix.os }}
+    name: Test SDist (${{ matrix.os }})
     needs: build_sdist
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+
     steps:
-      # Deliberately install without a checkout: all sources must be in the SDist.
+      # No checkout: test the actual source distribution.
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v6
+
+      - name: Download SDist
+        uses: actions/download-artifact@v6
         with:
           name: pypi-sdist
           path: dist
+
       - name: Install from source distribution
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install --verbose dist/*.tar.gz
+
       - name: Check installed native extension
         run: >-
-          python -c "import SilKit_py as m; from importlib.metadata import version; assert m.__version__ == version('SilKit_py'); assert m.participant_configuration_from_String('{}') is not None; print(m.__version__)"
+          python -c "import SilKit_py as m;
+          from importlib.metadata import version;
+          assert m.__version__ == version('SilKit_py');
+          assert m.participant_configuration_from_String('{}') is not None;
+          print(m.__version__)"
+
+  build_wheels:
+    name: Build Wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install cibuildwheel
+        run: python -m pip install "cibuildwheel==4.3.3"
+
+      - name: Build and test native wheels
+        env:
+          CIBW_BUILD: "cp312-* cp313-* cp314-*"
+          CIBW_SKIP: "*-musllinux*"
+
+          CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+
+          # Run in an isolated environment with the wheel
+          # installed, not from the source checkout.
+          CIBW_TEST_COMMAND: >-
+            python -c "import SilKit_py as m;
+            from importlib.metadata import version;
+            assert m.__version__ == version('SilKit_py');
+            assert m.participant_configuration_from_String('{}') is not None;
+            print(m.__version__)"
+
+        run: python -m cibuildwheel --output-dir wheelhouse
+
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
 
   upload_all:
-    name: Publish SDist to PyPI
-    needs: [build_sdist, test_sdist]
-    if: github.event_name == 'release' && github.event.action == 'published'
+    name: Publish SDist and Wheels to PyPI
+
+    needs:
+      - build_sdist
+      - test_sdist
+      - build_wheels
+
+    if: >-
+      github.event_name == 'release' &&
+      github.event.action == 'published'
+
     runs-on: ubuntu-latest
     environment: pypi
+
     permissions:
+      contents: read
       id-token: write
+
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Download SDist
+        uses: actions/download-artifact@v6
         with:
           name: pypi-sdist
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Download Wheels
+        uses: actions/download-artifact@v6
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check distributions
+        run: |
+          python -m pip install --upgrade twine
+          python -m twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

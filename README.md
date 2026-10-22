@@ -28,151 +28,101 @@ This repository is experimental / work-in-progress. API and build steps may chan
 
 ---
 
-## Getting the sources
-
-Clone this repository and update the submodules:
+## Installation
 
 ```bash
-git clone <this-repo-url>
+python -m pip install SilKit_py
+```
+
+Prebuilt wheels are available for CPython 3.12–3.14 on Windows (AMD64) and
+Linux (x86_64). They already contain the SIL Kit runtime and tools, so nothing
+else needs to be installed. On other platforms pip builds from source, which
+requires a C++ compiler (see [Development](#development)).
+
+## SIL Kit tools
+
+The registry, system controller, and monitor are included in the package and
+can be started from any directory:
+
+```bash
+silkit-registry
+silkit-system-controller
+silkit-monitor
+```
+
+## Example
+
+Start `silkit-registry` first, then:
+
+```python
+import asyncio
+import SilKit_py as m
+
+cfg = m.participant_configuration_from_String("""
+Logging:
+  Sinks:
+  - Type: Stdout
+    Level: Info
+""")
+participant = m.create_participant(cfg, "PyParticipant", "silkit://localhost:8501")
+
+lifecycle = participant.create_lifecycle_service(
+    m.LifecycleConfiguration(m.OperationMode.Autonomous)
+)
+time_sync = lifecycle.create_time_sync_service()
+
+def step_handler(now_ns: int, duration_ns: int) -> None:
+    print(f"now={now_ns} ns, dt={duration_ns} ns")
+
+time_sync.set_simulation_step_handler(step_handler, 1_000_000)  # 1 ms
+
+asyncio.run(lifecycle.start_lifecycle())
+```
+
+See the [SIL Kit documentation](https://vectorgrp.github.io/sil-kit-docs/index.html)
+for the underlying C++ API.
+
+**CAN notes:** with `send_frame(..., dlc=None)` the DLC is derived from the
+payload length. Valid lengths are 0–8 bytes for classic CAN, 0–8, 12, 16, 20,
+24, 32, 48, or 64 bytes for CAN FD, and 1–2048 bytes for CAN XL. Other lengths
+raise `ValueError`, and payloads are never padded. `CanFrameEvent.timestamp`
+is given in nanoseconds.
+
+## Development
+
+Requirements: Python ≥ 3.9, CMake, and a C++ compiler (Visual Studio Build
+Tools with the C++ workload on Windows, GCC/Clang plus Python headers on Linux).
+
+```bash
+git clone --recursive <this-repo-url>
 cd SilKit_py
-```
-
-:: Update sub repos (submodules)
-```bash
-git submodule update --init --recursive
-```
-
-### Setup (Windows, cmd.exe)
-
-All commands below assume you are in the repository root.
-
-Create and activate a virtual environment:
-
-```bash
 python -m venv .venv
-.venv\Scripts\activate.bat
-```
-
-Upgrade pip:
-```bash
-python -m pip install --upgrade pip
-```
-
-Build and install the package with its development tools:
-```bash
-python -m pip install . --group dev
-```
-
-To additionally create a distributable wheel in `dist/`:
-```bash
-python -m build --wheel
-```
-
-Python dependencies are maintained in `pyproject.toml`: `build-system.requires`
-declares the isolated build dependencies, `test` contains the test tools, and
-`dev` includes tests, the wheel builder, Ruff, and pybind11 headers for the IDE.
-Transitive dependencies are installed automatically. Use `--group test` instead
-of `--group dev` if you only need the tests, or `pip install --group dev` to install
-the development tools without rebuilding the package. Dependency groups require
-pip 25.1 or newer.
-
-The VS Code tasks use the local `.venv` on Windows and Linux. `Create Package`
-builds a wheel; `Install Package` installs the project into that environment.
-
-After these steps, the SilKit_py package should be importable inside the virtual environment:
-```bash
-import SilKit_py as silkit
-print(silkit.__version__)
-```
-Running the SIL Kit registry and tools
-
-Some tests and examples assume the SIL Kit registry and tools are available as local executables, e.g.:
-```bash
-./build-silkit/Release/sil-kit-registry.exe
-
-./build-silkit/Release/sil-kit-system-controller.exe
-
-./build-silkit/Release/sil-kit-monitor.exe
-```
-They are also build while the wheel build
-
-## Running the tests
-
-With the virtual environment activated:
-```bash
-pytest -s
-```
-
-On Linux, create a virtual environment and build/install from the repository root:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
+.venv\Scripts\activate          # Linux: source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install . --group dev
 python -m pytest
 ```
 
-The tests find SIL Kit tools in `build-silkit/Release` relative to the repository,
-using `.exe` on Windows and no suffix on Linux. Set `SILKIT_BIN_DIR` to use tools
-from another build or installation. The registry is started by the shared test
-fixture; a dashboard is not required.
+The first build compiles SIL Kit into `build-silkit/`; later builds reuse it.
+To create a wheel in `dist/`, run `python -m build --wheel`.
 
-`ICanController.send_frame(..., dlc=None)` derives the wire DLC from the payload:
-Classic CAN accepts 0–8 bytes; CAN FD accepts 0–8, 12, 16, 20, 24, 32, 48 or
-64 bytes; CAN XL accepts 1–2048 bytes. Other lengths raise `ValueError` when
-automatic DLC selection is used. Payloads are never padded implicitly. An explicit
-`dlc` remains caller-controlled. Received `CanFrameEvent.timestamp` is an integer
-number of nanoseconds.
+- Dependency groups in `pyproject.toml` (pip ≥ 25.1 required): `test` contains
+  pytest; `dev` also adds `build`, Ruff, and pybind11 headers for the IDE.
+- The tests start the registry themselves and use the tools from
+  `build-silkit/Release`. Set `SILKIT_BIN_DIR` to use another location.
+- The VS Code tasks `Create Package` and `Install Package` use the local `.venv`.
 
-The tests include:
+## CI and releases
 
-Basic construction of participants and configurations
+- **`ci.yml`:** runs on pull requests and pushes to `main`. It builds the
+  package and runs the tests on Windows, Linux, and macOS with Python
+  3.12–3.14. It never publishes anything.
+- **`wheels.yml`:** builds the sdist and the wheels (via cibuildwheel) and
+  tests them. When a GitHub Release is published, it uploads them to PyPI.
 
-Lifecycle service usage (autonomous and coordinated)
-
-Time sync with simulation step handlers
-
-Pub/Sub publisher and subscriber interaction using the system controller
-
-Minimal usage example
-```Python
-import SilKit_py as m
-
-uri = "silkit://localhost:8501"
-
-yaml_cfg = """
-Logging:
-  Sinks:
-  - Type: File
-    Level: Trace
-    LogName: SimpleParticipantLog
-"""
-
-# Create participant configuration from YAML string
-cfg = m.participant_configuration_from_String(yaml_cfg)
-
-# Create a participant
-participant = m.create_participant(cfg, "PyParticipant", uri)
-
-# Create coordinated lifecycle and time sync
-lc_cfg = m.LifecycleConfiguration(m.OperationMode.Autonomous)
-lifecycle = participant.create_lifecycle_service(lc_cfg)
-time_sync = lifecycle.create_time_sync_service()
-
-def step_handler(now_ns: int, duration_ns: int) -> None:
-    print(f"Simulation step: now={now_ns}, dt={duration_ns}")
-
-time_sync.set_simulation_step_handler(step_handler, int(1_000_000))  # 1 ms
-
-# Run lifecycle inside asyncio
-import asyncio
-
-async def main():
-    await lifecycle.start_lifecycle()
-
-asyncio.run(main())
-```
+To release, increase `version` in `pyproject.toml`, then publish a GitHub
+Release. Publishing uses PyPI Trusted Publishing with workflow `wheels.yml`
+and environment `pypi`.
 
 # TODOs
 
@@ -194,21 +144,3 @@ ITimeSyncService
 - [ ] System Utilities
 
 - [ ] Custom Network Simulator
-
-## PyPI source releases
-
-The GitHub Actions workflow `.github/workflows/wheels.yml` builds a source
-archive with `python -m build --sdist`, including the recursive SIL Kit
-submodules. It installs that same archive on Linux and Windows and checks that
-the native extension loads before publishing it for a published GitHub Release.
-Pull requests, pushes to `master`, and manual runs only build and validate.
-
-For publishing, configure a PyPI Trusted Publisher for this GitHub repository,
-workflow filename `wheels.yml`, and environment `pypi`. Increase the version in
-`pyproject.toml` before each new release.
-
-After publication, install with `python -m pip install SilKit_py`. Since this
-workflow publishes a source archive, installation compiles the C++ extension
-and SIL Kit locally. Windows needs Visual Studio Build Tools with the C++
-workload; Linux needs a C++ compiler and Python development headers. The isolated
-Python build installs its Python build dependencies automatically.

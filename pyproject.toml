@@ -15,6 +15,11 @@ authors = [
 requires-python = ">=3.9"
 classifiers = []
 
+[project.scripts]
+silkit-registry = "SilKit_py.tools:registry"
+silkit-system-controller = "SilKit_py.tools:system_controller"
+silkit-monitor = "SilKit_py.tools:monitor"
+
 [dependency-groups]
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
 dev = [
