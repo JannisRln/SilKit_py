@@ -99,7 +99,7 @@ jobs:
 
       - name: Build and test native wheels
         env:
-          CIBW_BUILD: "cp312-*"
+          CIBW_BUILD: "cp312-* cp313-* cp314-*"
           CIBW_SKIP: "*-musllinux*"
 
           CIBW_ARCHS_LINUX: "x86_64"

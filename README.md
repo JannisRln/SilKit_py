@@ -41,10 +41,10 @@ For setup, examples, and test-environment requirements, see the [Scenario Runner
 
 ## Installation
 
-Once version **1.0.4** is published to PyPI, install it with:
+Once version **1.0.5** is published to PyPI, install it with:
 
 ```bash
-python -m pip install SilKit_py==1.0.4
+python -m pip install SilKit_py==1.0.5
 ```
 
 Verify the installation:
@@ -213,11 +213,11 @@ The repository has two separate GitHub Actions workflows:
 
 Publishing uses **PyPI Trusted Publishing** with the GitHub Environment `pypi` and the registered workflow file `wheels.yml`.
 
-For a **1.0.4** release:
+For a **1.0.5** release:
 
-1. Confirm that `pyproject.toml` contains `version = "1.0.4"`.
+1. Confirm that `pyproject.toml` contains `version = "1.0.5"`.
 2. Ensure the CI and distribution builds pass on the supported targets.
-3. Create and publish a GitHub Release with tag `v1.0.4`.
+3. Create and publish a GitHub Release with tag `v1.0.5`.
 4. Verify the generated artifacts and installation from PyPI.
 
 ## API coverage and roadmap

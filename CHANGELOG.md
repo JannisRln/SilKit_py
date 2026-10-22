@@ -1,5 +1,9 @@
 # Changelog
 
+### 1.0.5 
+ 
+- 🐛 Add Python 3.13 and 3.14 wheel support
+
 ### 1.0.4
 
 - Added Windows and Linux build support, including native library packaging and cross-platform development tasks.

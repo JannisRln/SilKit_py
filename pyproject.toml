@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "SilKit_py"
-version = "1.0.4"
+version = "1.0.5"
 license = "MIT"
 license-files = ["LICENSE"]
 description = "Python bindings for Vector SIL Kit, providing participant lifecycle management, time synchronization, CAN, RPC, and Pub/Sub communication."
