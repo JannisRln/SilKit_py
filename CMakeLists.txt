@@ -12,7 +12,7 @@ cmake_policy(VERSION 3.15)
 # Dependencies
 # ---------------------------------------------------------------------------
 
-find_package(Python REQUIRED COMPONENTS Interpreter Development)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
 
 set(PYBIND11_ENABLE_SMART_HOLDER ON CACHE BOOL "" FORCE)

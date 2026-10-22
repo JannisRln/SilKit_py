@@ -103,14 +103,19 @@ jobs:
 
       - name: Build and test native wheels
         env:
-          CIBW_BUILD: "cp312-* cp313-* cp314-*"
+          CIBW_BUILD: "cp312-*"
           CIBW_SKIP: "*-musllinux*"
 
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_WINDOWS: "AMD64"
 
-          # Run in an isolated environment with the wheel
-          # installed, not from the source checkout.
+          CIBW_BUILD_VERBOSITY: "3"
+
+          # SIL Kit DLL is already bundled by CMake.
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
+            delvewheel repair --ignore-existing
+            -w {dest_dir} -v {wheel}
+
           CIBW_TEST_COMMAND: >-
             python -c "import SilKit_py as m;
             from importlib.metadata import version;
