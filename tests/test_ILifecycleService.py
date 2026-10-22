@@ -5,7 +5,10 @@ import asyncio
 import threading
 import subprocess, time
 import pytest
-from common import simpel_yamel, uri, silkit_registry
+
+from common import simpel_yamel, uri, silkit_executable
+
+pytestmark = pytest.mark.usefixtures("silkit_registry")
 
 
 def test_callable_of_create_lifecycle_service():
@@ -110,7 +113,7 @@ def system_controller(silkit_registry):
     sil_kit_monitor = None
     # System Controller starten
     proc = subprocess.Popen([
-        "./build-silkit/Release/sil-kit-system-controller.exe",
+        silkit_executable("sil-kit-system-controller"),
         "PubParticipant",
         "SubParticipant",
         "-u", uri,
@@ -121,7 +124,7 @@ def system_controller(silkit_registry):
     time.sleep(0.3)  # kurze Wartezeit
     if(run_sil_kit_monitor):
         sil_kit_monitor = subprocess.Popen([
-            "./build-silkit/Release/sil-kit-monitor.exe",
+            silkit_executable("sil-kit-monitor"),
             "-u", uri
         ],
         stdout=None,
@@ -163,6 +166,7 @@ async def test_pub_sub_with_coordinated_lifecycle(system_controller):
 
     published = {"sent": False}
 
+    loop = asyncio.get_running_loop()
     received_event = asyncio.Event()
 
     def pub_step(now, duration):
@@ -189,7 +193,7 @@ async def test_pub_sub_with_coordinated_lifecycle(system_controller):
 
         pub_lc.stop("Done")
         sub_lc.stop("Done")
-        received_event.set()
+        loop.call_soon_threadsafe(received_event.set)
 
     subscriber = sub.create_data_subscriber(
         "SubscriberController",
@@ -221,7 +225,7 @@ async def test_pub_sub_with_coordinated_lifecycle(system_controller):
 @pytest.fixture
 def single_participant_controller(silkit_registry):
     proc = subprocess.Popen([
-        "./build-silkit/Release/sil-kit-system-controller.exe",
+        silkit_executable("sil-kit-system-controller"),
         "AsyncNonBlockingTest",
         "-u", uri,
         "-l", "Off"

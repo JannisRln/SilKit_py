@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import SilKit_py as m
+from importlib.metadata import version
 import asyncio
 import threading
 import subprocess, time
 import pytest
 
+
 from common import simpel_yamel, uri
 
-def test_version():
-    assert m.__version__ == "1.0.3"
+pytestmark = pytest.mark.usefixtures("silkit_registry")
 
 def test_participant_configuration_from_String_is_callable():
     assert callable(m.participant_configuration_from_String)

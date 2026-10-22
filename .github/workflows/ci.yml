@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.platform }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip
+
+      - name: Build and install
+        run: python -m pip install --verbose . --group test
+
+      - name: Run tests
+        run: python -m pytest
+
+      - name: Check bundled SIL Kit tools
+        run: >-
+          python -c "from SilKit_py.tools import executable; import subprocess;
+          [subprocess.run([str(executable(name)), '--help'], check=True,
+          stdout=subprocess.DEVNULL) for name in ('sil-kit-registry',
+          'sil-kit-system-controller', 'sil-kit-monitor')]"
