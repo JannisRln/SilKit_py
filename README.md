@@ -194,3 +194,21 @@ ITimeSyncService
 - [ ] System Utilities
 
 - [ ] Custom Network Simulator
+
+## PyPI source releases
+
+The GitHub Actions workflow `.github/workflows/wheels.yml` builds a source
+archive with `python -m build --sdist`, including the recursive SIL Kit
+submodules. It installs that same archive on Linux and Windows and checks that
+the native extension loads before publishing it for a published GitHub Release.
+Pull requests, pushes to `master`, and manual runs only build and validate.
+
+For publishing, configure a PyPI Trusted Publisher for this GitHub repository,
+workflow filename `wheels.yml`, and environment `pypi`. Increase the version in
+`pyproject.toml` before each new release.
+
+After publication, install with `python -m pip install SilKit_py`. Since this
+workflow publishes a source archive, installation compiles the C++ extension
+and SIL Kit locally. Windows needs Visual Studio Build Tools with the C++
+workload; Linux needs a C++ compiler and Python development headers. The isolated
+Python build installs its Python build dependencies automatically.

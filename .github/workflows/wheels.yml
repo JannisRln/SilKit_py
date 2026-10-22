@@ -1,0 +1,77 @@
+name: PyPI source distribution
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - master
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build_sdist:
+    name: Build SDist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install packaging tools
+        run: python -m pip install build twine
+      - name: Build source distribution
+        run: python -m build --sdist
+      - name: Check metadata
+        run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v5
+        with:
+          name: pypi-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  test_sdist:
+    name: Install SDist on ${{ matrix.os }}
+    needs: build_sdist
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      # Deliberately install without a checkout: all sources must be in the SDist.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v6
+        with:
+          name: pypi-sdist
+          path: dist
+      - name: Install from source distribution
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --verbose dist/*.tar.gz
+      - name: Check installed native extension
+        run: >-
+          python -c "import SilKit_py as m; from importlib.metadata import version; assert m.__version__ == version('SilKit_py'); assert m.participant_configuration_from_String('{}') is not None; print(m.__version__)"
+
+  upload_all:
+    name: Publish SDist to PyPI
+    needs: [build_sdist, test_sdist]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: pypi-sdist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
