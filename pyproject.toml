@@ -7,13 +7,18 @@ name = "SilKit_py"
 version = "1.0.4"
 license = "MIT"
 license-files = ["LICENSE"]
-description = "A minimal example package (with pybind11)"
+description = "Python bindings for Vector SIL Kit, providing participant lifecycle management, time synchronization, CAN, RPC, and Pub/Sub communication."
 readme = "README.md"
 authors = [
   { name = "J. Rln", email = "jannis.roeglin@gmail.com" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12,<3.15"
 classifiers = []
+
+[project.urls]
+Homepage = "https://github.com/JannisRln/SilKit_py"
+Repository = "https://github.com/JannisRln/SilKit_py"
+Issues = "https://github.com/JannisRln/SilKit_py/issues"
 
 [project.scripts]
 silkit-registry = "SilKit_py.tools:registry"
