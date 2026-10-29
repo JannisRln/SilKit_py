@@ -21,7 +21,7 @@ exists for your OS and architecture. Source builds require CMake,
 a C++ toolchain, and the SIL Kit submodule.
 
 CAN or Pub/Sub data is unexpected
---------------------------------
+---------------------------------
 
 Check that network names, topics, and payload encodings match the peer.
 CAN payloads are not padded automatically.
