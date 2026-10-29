@@ -10,7 +10,7 @@ except PackageNotFoundError:
     release = "1.0.5"
 version = ".".join(release.split(".")[:2])
 extensions = ["myst_parser"]
-source_suffix = {".md": "markdown"}
+source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
 root_doc = "index"
 exclude_patterns = ["_build"]
 html_theme = "furo"
