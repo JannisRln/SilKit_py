@@ -41,7 +41,7 @@ For setup, examples, and test-environment requirements, see the [Scenario Runner
 
 ## Documentation
 
-See the [documentation index](docs/index.rst) for installation, concepts, troubleshooting, and links to the Python API reference.
+See the [documentation index](docs/index.md) for installation, concepts, troubleshooting, and detailed API references for participants, lifecycle, Pub/Sub, CAN, RPC and logging.
 
 ## Installation
 
