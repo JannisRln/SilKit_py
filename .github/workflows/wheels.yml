@@ -19,7 +19,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -51,7 +51,7 @@ jobs:
 
     steps:
       # No checkout: test the actual source distribution.
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -90,7 +90,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -148,7 +148,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
