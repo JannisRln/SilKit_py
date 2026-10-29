@@ -6,7 +6,7 @@ Python bindings for [Vector SIL Kit](https://github.com/vectorgrp/sil-kit), impl
 :maxdepth: 2
 :caption: Guides
 
-getting-started
+getting_started
 concepts
 troubleshooting
 ```
