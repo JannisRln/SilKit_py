@@ -31,13 +31,17 @@ For automated simulation scenarios, see **[SilKit_py_scenario_runner](https://gi
 
 The runner is **maintained in its own repository and distributed as a separate Python package**. It is not bundled with `SilKit_py` and is **not required** to use the core SIL Kit bindings.
 
-Once the runner has been published to PyPI under the name currently declared in its `pyproject.toml`, install it separately:
+After the runner has been published to PyPI, install it separately:
 
 ```bash
-python -m pip install silkit-scenario-runner
+python -m pip install SilKit_py_scenario_runner
 ```
 
 For setup, examples, and test-environment requirements, see the [Scenario Runner README](https://github.com/JannisRln/SilKit_py_scenario_runner#readme). Its integration tests require a suitable SIL Kit registry and peer participants; `SilKit_py` alone does not supply an ECU implementation.
+
+## Documentation
+
+See the [documentation index](docs/index.md) for installation, concepts, troubleshooting, and detailed API references for participants, lifecycle, Pub/Sub, CAN, RPC and logging.
 
 ## Installation
 
@@ -58,7 +62,6 @@ python -c "import SilKit_py as silkit; print(silkit.__version__)"
 - **CPython 3.12–3.14:** targeted by the current CI and wheel-building configuration.
 - **Windows x64 and Linux x86_64:** targeted for prebuilt release wheels.
 - **macOS:** included in source-build CI testing, but no prebuilt macOS wheel is promised.
-- **Python 3.9–3.11:** allowed by the current package metadata, but not covered by the current release wheel matrix.
 
 Check the **Download files** section of the [PyPI project](https://pypi.org/project/SilKit-py/) after release for the wheel files actually available. If no compatible wheel is available, pip may attempt a source build, which requires a working C++ toolchain and the SIL Kit sources.
 
