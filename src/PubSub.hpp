@@ -2,6 +2,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
 #include <pybind11/stl.h>
+#include "PythonCallback.hpp"
 #include "silkit/SilKit.hpp"
 #include "silkit/util/serdes/Serialization.hpp"
 
@@ -17,7 +18,7 @@ void bind_PubSub(py::module_ &m)
     );
 
     py::class_<SilKit::Services::PubSub::IDataPublisher, py::smart_holder>(
-        m, "IDataPublisher")
+        m, "IDataPublisher", py::dynamic_attr())
         .def(
             "publish",
             [](SilKit::Services::PubSub::IDataPublisher* self, py::bytes py_data)
@@ -35,6 +36,7 @@ void bind_PubSub(py::module_ &m)
 
                 SilKit::Util::Span<const uint8_t> span(ptr, size);
 
+                py::gil_scoped_release release;
                 self->Publish(span);
             },
             py::arg("data"),
@@ -42,7 +44,7 @@ void bind_PubSub(py::module_ &m)
         );
 
     py::class_<SilKit::Services::PubSub::IDataSubscriber, py::smart_holder>(
-        m, "IDataSubscriber");
+        m, "IDataSubscriber", py::dynamic_attr());
 
     py::class_<SilKit::Services::PubSub::PubSubSpec>(m, "PubSubSpec")
         .def(py::init<>())
@@ -69,7 +71,8 @@ void bind_PubSub(py::module_ &m)
         .def_property_readonly("labels",
              &SilKit::Services::PubSub::PubSubSpec::Labels);
 
-    py::class_<SilKit::Services::PubSub::DataMessageEvent>(m, "DataMessageEvent")
+    py::class_<SilKit::Services::PubSub::DataMessageEvent,
+        std::shared_ptr<SilKit::Services::PubSub::DataMessageEvent>>(m, "DataMessageEvent")
         .def_property_readonly(
             "timestamp",
             [](const SilKit::Services::PubSub::DataMessageEvent& e) {
@@ -128,7 +131,8 @@ void bind_Rpc(py::module_ &m)
         .def_property_readonly("labels",
              &SilKit::Services::Rpc::RpcSpec::Labels);
 
-    py::class_<SilKit::Services::Rpc::RpcCallResultEvent>(m, "RpcCallResultEvent")
+    py::class_<SilKit::Services::Rpc::RpcCallResultEvent,
+        std::shared_ptr<SilKit::Services::Rpc::RpcCallResultEvent>>(m, "RpcCallResultEvent")
         .def_property_readonly(
             "timestamp_ns",
             [](const SilKit::Services::Rpc::RpcCallResultEvent& e) {
@@ -159,7 +163,8 @@ void bind_Rpc(py::module_ &m)
             "RPC call result data (valid only if call_status == Success)"
         );
 
-    py::class_<SilKit::Services::Rpc::RpcCallEvent>(m, "RpcCallEvent")
+    py::class_<SilKit::Services::Rpc::RpcCallEvent,
+        std::shared_ptr<SilKit::Services::Rpc::RpcCallEvent>>(m, "RpcCallEvent")
         .def_property_readonly(
             "timestamp_ns",
             [](const SilKit::Services::Rpc::RpcCallEvent& e) {
@@ -185,19 +190,19 @@ void bind_Rpc(py::module_ &m)
             "RPC call argument data"
         );
 
-    py::class_<SilKit::Services::Rpc::IRpcClient>(m, "IRpcClient")
+    py::class_<SilKit::Services::Rpc::IRpcClient>(m, "IRpcClient", py::dynamic_attr())
         .def(
             "call",
             [](SilKit::Services::Rpc::IRpcClient& self,
                py::bytes data,
                py::object user_context) {
-                std::cout << "IRpcClient.call" << std::endl;
                 std::string buffer = data;
                 void* ctx = user_context.is_none()
                     ? nullptr
                     : reinterpret_cast<void*>(
                           user_context.cast<std::uintptr_t>());
 
+                py::gil_scoped_release release;
                 self.Call(
                     SilKit::Util::Span<const uint8_t>(
                         reinterpret_cast<const uint8_t*>(buffer.data()),
@@ -214,13 +219,13 @@ void bind_Rpc(py::module_ &m)
                py::bytes data,
                std::uint64_t timeout_ns,
                py::object user_context) {
-                std::cout << "IRpcClient.call_with_timeout" << std::endl;
                 std::string buffer = data;
                 void* ctx = user_context.is_none()
                     ? nullptr
                     : reinterpret_cast<void*>(
                           user_context.cast<std::uintptr_t>());
 
+                py::gil_scoped_release release;
                 self.CallWithTimeout(
                     SilKit::Util::Span<const uint8_t>(
                         reinterpret_cast<const uint8_t*>(buffer.data()),
@@ -235,19 +240,21 @@ void bind_Rpc(py::module_ &m)
         )
         .def(
             "set_call_result_handler",
-            [](SilKit::Services::Rpc::IRpcClient& self, py::function py_handler) {
-                self.SetCallResultHandler(
-                    [py_handler](SilKit::Services::Rpc::IRpcClient* client,
-                                 const SilKit::Services::Rpc::RpcCallResultEvent& event) {
-                        py::gil_scoped_acquire gil;
-                        py_handler(client, event);
-                    });
+            [](py::object self, py::function py_handler) {
+                auto* client = self.cast<SilKit::Services::Rpc::IRpcClient*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    client->SetCallResultHandler(std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(client, "result"));
             },
             py::arg("handler"),
             "Set the RPC call result handler"
         );
         
-    py::class_<SilKit::Services::Rpc::IRpcServer>(m, "IRpcServer")
+    py::class_<SilKit::Services::Rpc::IRpcServer>(m, "IRpcServer", py::dynamic_attr())
         .def(
             "submit_result",
             [](SilKit::Services::Rpc::IRpcServer& self,
@@ -255,6 +262,7 @@ void bind_Rpc(py::module_ &m)
                py::bytes result_data) {
                 std::string buffer = result_data;
 
+                py::gil_scoped_release release;
                 self.SubmitResult(
                     reinterpret_cast<SilKit::Services::Rpc::IRpcCallHandle*>(call_handle),
                     SilKit::Util::Span<const uint8_t>(
@@ -267,13 +275,15 @@ void bind_Rpc(py::module_ &m)
         )
         .def(
             "set_call_handler",
-            [](SilKit::Services::Rpc::IRpcServer& self, py::function py_handler) {
-                self.SetCallHandler(
-                    [py_handler](SilKit::Services::Rpc::IRpcServer* server,
-                                 const SilKit::Services::Rpc::RpcCallEvent& event) {
-                        py::gil_scoped_acquire gil;
-                        py_handler(server, event);
-                    });
+            [](py::object self, py::function py_handler) {
+                auto* server = self.cast<SilKit::Services::Rpc::IRpcServer*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    server->SetCallHandler(std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(server, "call"));
             },
             py::arg("handler"),
             "Set the RPC call handler"

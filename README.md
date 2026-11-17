@@ -34,17 +34,15 @@ The runner is **maintained in its own repository and distributed as a separate P
 Once the runner has been published to PyPI under the name currently declared in its `pyproject.toml`, install it separately:
 
 ```bash
-python -m pip install silkit-scenario-runner
+pip install silkit-scenario-runner
 ```
 
 For setup, examples, and test-environment requirements, see the [Scenario Runner README](https://github.com/JannisRln/SilKit_py_scenario_runner#readme). Its integration tests require a suitable SIL Kit registry and peer participants; `SilKit_py` alone does not supply an ECU implementation.
 
 ## Installation
 
-Once version **1.0.5** is published to PyPI, install it with:
-
 ```bash
-python -m pip install SilKit_py==1.0.5
+pip install SilKit_py
 ```
 
 Verify the installation:
@@ -136,6 +134,29 @@ For the CAN API, `send_frame(..., dlc=None)` determines the DLC from the payload
 
 Invalid payload lengths raise `ValueError`; payloads are not padded automatically. `CanFrameEvent.timestamp` is expressed in nanoseconds.
 
+`CanFrameFlag`, `TransmitDirection` and `CanTransmitStatus` are Python `IntFlag`
+types. Flags can be combined directly, for example `CanFrameFlag.Fdf | CanFrameFlag.Brs`.
+CAN transmit events return `user_context` as the integer supplied to `send_frame`.
+Use `controller.remove_frame_handler(handler_id)` to unregister a CAN callback.
+
+### Callback and service lifetimes
+
+Services keep their participant alive, and a time-sync service keeps its lifecycle
+service alive. Registered handlers remain active until replaced, removed, or their
+participant is destroyed, even if the Python service wrapper is discarded.
+Callback references are visible to Python's garbage collector, including cycles
+formed by bound methods, closures and callable objects.
+
+CAN, Pub/Sub and RPC callback events own copies of their payloads. Events and CAN
+frames may be saved or passed to a GUI queue and read after the callback returns.
+An RPC call handle still follows SIL Kit's native request lifetime; retaining an
+event does not extend that handle's validity.
+
+`start_lifecycle()` starts the native lifecycle immediately and returns an
+awaitable for its final state. Cancelling that awaitable (including with
+`asyncio.wait_for`) cancels only the wait and does not occupy an executor worker.
+Call `lifecycle.stop(reason)` explicitly when the simulation should stop.
+
 ## Building from source
 
 ### Requirements
@@ -212,13 +233,6 @@ The repository has two separate GitHub Actions workflows:
 | `wheels.yml` | Build and verify source/wheel distributions; publish to PyPI on a GitHub release |
 
 Publishing uses **PyPI Trusted Publishing** with the GitHub Environment `pypi` and the registered workflow file `wheels.yml`.
-
-For a **1.0.5** release:
-
-1. Confirm that `pyproject.toml` contains `version = "1.0.5"`.
-2. Ensure the CI and distribution builds pass on the supported targets.
-3. Create and publish a GitHub Release with tag `v1.0.5`.
-4. Verify the generated artifacts and installation from PyPI.
 
 ## API coverage and roadmap
 

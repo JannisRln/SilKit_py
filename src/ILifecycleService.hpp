@@ -1,12 +1,32 @@
 #pragma once
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
+#include "PythonCallback.hpp"
 #include "silkit/SilKit.hpp"
 
 namespace py = pybind11;
 
+struct LifecycleCompletion
+{
+    std::future<SilKit::Services::Orchestration::ParticipantState> future;
+};
+
 void bind_ILifecycleService(py::module_ &m)
     {
+    py::class_<LifecycleCompletion>(m, "_LifecycleCompletion", py::dynamic_attr())
+        .def("ready", [](LifecycleCompletion& completion) {
+            // get() invalidates the future; wait_for on it would be undefined.
+            if (!completion.future.valid())
+                return true;
+            return completion.future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        })
+        .def("result", [](LifecycleCompletion& completion) {
+            if (!completion.future.valid())
+                throw std::runtime_error("Lifecycle result was already retrieved");
+            if (completion.future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+                throw std::runtime_error("Lifecycle has not completed");
+            return completion.future.get();
+        });
     py::enum_<SilKit::Services::Orchestration::OperationMode>(m, "OperationMode")
         .value("Invalid",      SilKit::Services::Orchestration::OperationMode::Invalid)
         .value("Coordinated",  SilKit::Services::Orchestration::OperationMode::Coordinated)
@@ -20,108 +40,84 @@ void bind_ILifecycleService(py::module_ &m)
             &SilKit::Services::Orchestration::LifecycleConfiguration::operationMode);
 
     py::class_<SilKit::Services::Orchestration::ILifecycleService,
-        py::smart_holder>(m, "ILifecycleService")
+        py::smart_holder>(m, "ILifecycleService", py::dynamic_attr())
         .def("set_communication_ready_handler",  
-            [](SilKit::Services::Orchestration::ILifecycleService& self, py::function py_handler){
-                
-                py::gil_scoped_acquire gil;
-                py::function handler_copy = py_handler;
-
-                self.SetCommunicationReadyHandler(
-                    [handler_copy]( ){
-
-                        py::gil_scoped_acquire gil;
-
-                        try {
-                            handler_copy();
-                        }
-                        catch (const py::error_already_set& e) {
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                    }
-                );
+            [](py::object self, py::function py_handler){
+                auto* service = self.cast<SilKit::Services::Orchestration::ILifecycleService*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    service->SetCommunicationReadyHandler(std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(service, "ready"));
             }
         )
         .def("set_communication_ready_handler_async",  
-            [](SilKit::Services::Orchestration::ILifecycleService& self, py::function py_handler){
-                
-                py::gil_scoped_acquire gil;
-                py::function handler_copy = py_handler;
-
-                self.SetCommunicationReadyHandlerAsync(
-                    [handler_copy]( ){
-
-                        py::gil_scoped_acquire gil;
-
-                        try {
-                            handler_copy();
-                        }
-                        catch (const py::error_already_set& e) {
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                    }
-                );
+            [](py::object self, py::function py_handler){
+                auto* service = self.cast<SilKit::Services::Orchestration::ILifecycleService*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    service->SetCommunicationReadyHandlerAsync(std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(service, "ready"));
             }
         )
         .def("complete_communication_ready_handler_async",
-            &SilKit::Services::Orchestration::ILifecycleService::CompleteCommunicationReadyHandlerAsync)
+            &SilKit::Services::Orchestration::ILifecycleService::CompleteCommunicationReadyHandlerAsync,
+            py::call_guard<py::gil_scoped_release>())
         .def(
             "start_lifecycle",
-            [](SilKit::Services::Orchestration::ILifecycleService& self) {
-
-                auto fut = self.StartLifecycle();
-
-                auto wait_fn = [fut = std::move(fut)]() mutable {
+            [](py::object self) {
+                auto* service = self.cast<SilKit::Services::Orchestration::ILifecycleService*>();
+                auto fut = [service] {
                     py::gil_scoped_release release;
-                    return fut.get();
-                };
-
-                py::object asyncio = py::module_::import("asyncio");
-                py::object to_thread = asyncio.attr("to_thread");
-
-                return to_thread(py::cpp_function(std::move(wait_fn)));
+                    return service->StartLifecycle();
+                }();
+                auto completion = py::cast(LifecycleCompletion{std::move(fut)});
+                completion.attr("_silkit_owner") = self;
+                return py::module_::import("SilKit_py._lifecycle").attr("wait_for_completion")(completion);
             },
-            "Start lifecycle asynchronously. Returns an awaitable."
+            "Start lifecycle and return an awaitable. Cancelling it cancels the wait, not the simulation."
         )
-        .def("stop", &SilKit::Services::Orchestration::ILifecycleService::Stop)
-        .def("state", &SilKit::Services::Orchestration::ILifecycleService::State )
+        .def("stop", &SilKit::Services::Orchestration::ILifecycleService::Stop,
+            py::call_guard<py::gil_scoped_release>())
+        .def("state", &SilKit::Services::Orchestration::ILifecycleService::State,
+            py::call_guard<py::gil_scoped_release>())
         .def("create_time_sync_service",
-            &SilKit::Services::Orchestration::ILifecycleService::CreateTimeSyncService,
-            py::return_value_policy::reference);
+            [](py::object self) {
+                auto* lifecycle = self.cast<SilKit::Services::Orchestration::ILifecycleService*>();
+                SilKit::Services::Orchestration::ITimeSyncService* service;
+                { py::gil_scoped_release release; service = lifecycle->CreateTimeSyncService(); }
+                return SilKitPy::BorrowWithOwner(service, self);
+            });
 
 
     py::class_<SilKit::Services::Orchestration::ITimeSyncService, py::smart_holder>(
-        m, "ITimeSyncService"
+        m, "ITimeSyncService", py::dynamic_attr()
     )
         .def(
             "set_simulation_step_handler",
-            [](SilKit::Services::Orchestration::ITimeSyncService& self,
+            [](py::object self,
             py::function py_handler,
             py::object py_initial_step_size)
             {
                 auto step_size_int = py_initial_step_size.cast<int64_t>();
                 std::chrono::nanoseconds initial_step_size(step_size_int);
 
-                py::function handler_copy = py_handler;
-
-                self.SetSimulationStepHandler(
-                    [handler_copy](std::chrono::nanoseconds now,
-                                   std::chrono::nanoseconds duration)
-                    {
-                        py::gil_scoped_acquire gil;
-
-                        try {
-                            handler_copy(
-                                now.count(),
-                                duration.count()
-                            );
-                        }
-                        catch (const py::error_already_set& e) {
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                    },
-                    initial_step_size
-                );
+                auto* service = self.cast<SilKit::Services::Orchestration::ITimeSyncService*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    service->SetSimulationStepHandler(
+                        [handler](std::chrono::nanoseconds now, std::chrono::nanoseconds duration) {
+                            handler(now.count(), duration.count());
+                        }, initial_step_size);
+                }
+                registration.commit(SilKitPy::CallbackKey(service, "step"));
             },
             py::arg("handler"),
             py::arg("initial_step_size")
