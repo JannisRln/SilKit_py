@@ -1,5 +1,11 @@
 # Changelog
 
+### 1.0.6
+
+- Fixed GIL/native-thread deadlocks and shutdown hangs, made participant destruction safe during callbacks, and made lifecycle waits cancellable without stopping the simulation or blocking asyncio shutdown.
+- Corrected participant and callback lifetimes, made CAN/PubSub/RPC events own their payloads, and report callback exceptions as unraisable instead of terminating native threads.
+- Added CAN frame-handler removal, integer user contexts, native Python IntFlag operations, and subprocess regression tests for lifetimes, callback cycles, payload retention and cancellation.
+
 ### 1.0.5 
  
 - 🐛 Add Python 3.13 and 3.14 wheel support

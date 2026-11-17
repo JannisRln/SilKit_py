@@ -1,12 +1,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
-#include <iostream>
 
 #include "silkit/SilKit.hpp"
 
 #include "ICanController.hpp"
 #include "ILifecycleService.hpp"
 #include "PubSub.hpp"
+#include "PythonCallback.hpp"
 
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -15,6 +15,8 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(_core, m) {
     m.doc() = "SilKit Python Wrapper";
+    py::class_<SilKitPy::CallbackState>(m, "_CallbackState", py::dynamic_attr());
+    SilKitPy::RegisterShutdownHook();
 
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
@@ -45,132 +47,111 @@ PYBIND11_MODULE(_core, m) {
 
     m.def(
         "create_participant",
-        py::overload_cast<
-            std::shared_ptr<SilKit::Config::IParticipantConfiguration>,
-            const std::string&,
-            const std::string&
-        >(&SilKit::CreateParticipant),
+        [](std::shared_ptr<SilKit::Config::IParticipantConfiguration> config,
+           const std::string& name, const std::string& uri) {
+            auto participant = SilKit::CreateParticipant(std::move(config), name, uri);
+            return std::unique_ptr<SilKit::IParticipant, SilKitPy::ParticipantDeleter>(participant.release());
+        },
         py::arg("participant_config"),
         py::arg("participant_name"),
-        py::arg("registry_uri") = "silkit://localhost:8500");
+        py::arg("registry_uri") = "silkit://localhost:8500",
+        py::call_guard<py::gil_scoped_release>());
 
-    py::class_<SilKit::IParticipant, py::smart_holder>(m, "IParticipant")
+    // Destruction joins native threads, which may still be running callbacks.
+    py::class_<SilKit::IParticipant, py::smart_holder>(
+        m, "IParticipant", py::dynamic_attr(), py::release_gil_before_calling_cpp_dtor())
         .def("create_lifecycle_service",
-             &SilKit::IParticipant::CreateLifecycleService,
-            py::arg("lifecycle_service_config"),
-            py::return_value_policy::reference)
+            [](py::object self, SilKit::Services::Orchestration::LifecycleConfiguration config) {
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKit::Services::Orchestration::ILifecycleService* service;
+                { py::gil_scoped_release release; service = participant->CreateLifecycleService(config); }
+                SilKitPy::RegisterLifecycle(participant, service);
+                return SilKitPy::BorrowWithOwner(service, self);
+            }, py::arg("lifecycle_service_config"))
         .def("create_can_controller",
-            &SilKit::IParticipant::CreateCanController,
-            py::arg("canonical_name"),
-            py::arg("network_name"),
-            py::return_value_policy::reference)
+            [](py::object self, const std::string& name, const std::string& network) {
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKit::Services::Can::ICanController* controller;
+                { py::gil_scoped_release release; controller = participant->CreateCanController(name, network); }
+                return SilKitPy::BorrowWithOwner(controller, self);
+            }, py::arg("canonical_name"), py::arg("network_name"))
         .def("create_data_publisher",
-            &SilKit::IParticipant::CreateDataPublisher,
+            [](py::object self, const std::string& name, SilKit::Services::PubSub::PubSubSpec spec, size_t history) {
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKit::Services::PubSub::IDataPublisher* publisher;
+                { py::gil_scoped_release release; publisher = participant->CreateDataPublisher(name, spec, history); }
+                return SilKitPy::BorrowWithOwner(publisher, self);
+            },
             py::arg("canonical_name"),
             py::arg("data_spec"),
-            py::arg("history") = 0,
-            py::return_value_policy::reference)
+            py::arg("history") = 0)
         .def("create_data_subscriber",
-            [](SilKit::IParticipant* self,
+            [](py::object self,
             const std::string& canonicalName,
-            const SilKit::Services::PubSub::PubSubSpec& dataSpec,
+            SilKit::Services::PubSub::PubSubSpec dataSpec,
             py::function pyHandler)
             {
-                SilKit::Services::PubSub::DataMessageHandler handler =
-                    [pyHandler](SilKit::Services::PubSub::IDataSubscriber* sub,
-                                const SilKit::Services::PubSub::DataMessageEvent& evt)
-                    {
-                        py::gil_scoped_acquire gil;
-
-                        try {
-                            pyHandler(sub, evt);
-                        }
-                        catch (const py::error_already_set& e) {
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                    };
-
-                auto* subscriber =
-                    self->CreateDataSubscriber(canonicalName, dataSpec, std::move(handler));
-
-                return subscriber;
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(pyHandler));
+                SilKit::Services::PubSub::IDataSubscriber* subscriber;
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    subscriber = participant->CreateDataSubscriber(canonicalName, dataSpec, std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(subscriber, "data"));
+                return SilKitPy::BorrowWithOwner(subscriber, self);
             },
             py::arg("canonical_name"),
             py::arg("data_spec"),
-            py::arg("data_message_handler"),
-            py::return_value_policy::reference,
-            py::keep_alive<0, 3>()
+            py::arg("data_message_handler")
         )
         .def("create_rpc_client",
-            []( SilKit::IParticipant* self,
+            [](py::object self,
                 const std::string& canonicalName,
-                const SilKit::Services::Rpc::RpcSpec& dataSpec,
+                SilKit::Services::Rpc::RpcSpec dataSpec,
                 py::function pyHandler)
             {
-                std::cout << "create_rpc_client" << std::endl;
-                SilKit::Services::Rpc::RpcCallResultHandler  handler =
-                    [pyHandler](SilKit::Services::Rpc::IRpcClient* client,
-                                const SilKit::Services::Rpc::RpcCallResultEvent& evt)
-                    {
-                        py::gil_scoped_acquire gil;
-                        std::cout << "call IRpcClient.RpcCallResultHandler" << std::endl;
-
-                        try {
-                            pyHandler(client, evt);
-                        }
-                        catch (const py::error_already_set& e) {
-                            std::cout << "Error: IRpcClient.RpcCallResultHandler" << std::endl;
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                        std::cout << "call IRpcClient.RpcCallResultHandler finished" << std::endl;
-                    };
-
-                auto* client = self->CreateRpcClient(canonicalName, dataSpec, std::move(handler) );
-
-                return client;
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(pyHandler));
+                SilKit::Services::Rpc::IRpcClient* client;
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    client = participant->CreateRpcClient(canonicalName, dataSpec, std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(client, "result"));
+                return SilKitPy::BorrowWithOwner(client, self);
             },
             py::arg("canonical_name"),
             py::arg("data_spec"),
-            py::arg("handler"),
-            py::return_value_policy::reference,
-            py::keep_alive<0, 3>()
+            py::arg("handler")
         )
         .def("create_rpc_server",
-            []( SilKit::IParticipant* self,
+            [](py::object self,
                 const std::string& canonicalName,
-                const SilKit::Services::Rpc::RpcSpec& dataSpec,
+                SilKit::Services::Rpc::RpcSpec dataSpec,
                 py::function pyHandler)
             {
-                std::cout << "create_rpc_server" << std::endl;
-                SilKit::Services::Rpc::RpcCallHandler handler =
-                    [pyHandler](SilKit::Services::Rpc::IRpcServer* server,
-                                const SilKit::Services::Rpc::RpcCallEvent& evt)
-                    {
-                        py::gil_scoped_acquire gil;
-                        std::cout << "call create_rpc_server.RpcCallHandler" << std::endl;
-                        try {
-                            pyHandler(server, evt);
-                        }
-                        catch (const py::error_already_set& e) {
-                            std::cout << "Error: create_rpc_server.RpcCallHandler" << std::endl;
-                            PyErr_WriteUnraisable(e.value().ptr());
-                        }
-                        std::cout << "call create_rpc_server.RpcCallHandler finished" << std::endl;
-                    };
-
-                auto* server = self->CreateRpcServer(canonicalName, dataSpec, std::move(handler) );
-
-                return server;
+                auto* participant = self.cast<SilKit::IParticipant*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(pyHandler));
+                SilKit::Services::Rpc::IRpcServer* server;
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    server = participant->CreateRpcServer(canonicalName, dataSpec, std::move(handler));
+                }
+                registration.commit(SilKitPy::CallbackKey(server, "call"));
+                return SilKitPy::BorrowWithOwner(server, self);
             },
             py::arg("canonical_name"),
             py::arg("data_spec"),
-            py::arg("handler"),
-            py::return_value_policy::reference,
-            py::keep_alive<0, 3>()
+            py::arg("handler")
             )
         .def("get_logger", 
-             &SilKit::IParticipant::GetLogger,
-             py::return_value_policy::reference);
+            [](py::object self) {
+                return SilKitPy::BorrowWithOwner(self.cast<SilKit::IParticipant*>()->GetLogger(), self);
+            });
 
     py::enum_<SilKit::Services::Logging::Level>(m, "LogLevel")
         .value("Trace", SilKit::Services::Logging::Level::Trace) 
@@ -181,11 +162,12 @@ PYBIND11_MODULE(_core, m) {
         .value("Critical", SilKit::Services::Logging::Level::Critical) 
         .value("Off", SilKit::Services::Logging::Level::Off);
 
-    py::class_<SilKit::Services::Logging::ILogger, py::smart_holder>(m, "ILogger")
+    py::class_<SilKit::Services::Logging::ILogger, py::smart_holder>(m, "ILogger", py::dynamic_attr())
         .def("log", 
             &SilKit::Services::Logging::ILogger::Log,
             py::arg("level"),
-            py::arg("msg"));
+            py::arg("msg"),
+            py::call_guard<py::gil_scoped_release>());
 
     bind_ICanController( m );
 

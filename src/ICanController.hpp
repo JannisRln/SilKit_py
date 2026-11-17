@@ -1,9 +1,11 @@
 #pragma once
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
+#include <pybind11/native_enum.h>
 #include <cstring>
 #include <vector>
 #include "CanDlc.hpp"
+#include "PythonCallback.hpp"
 #include "silkit/SilKit.hpp"
 
 namespace py = pybind11;
@@ -11,11 +13,11 @@ namespace py = pybind11;
 void bind_ICanController(py::module_ &m)
     {
     // -------------------- CAN enums / masks --------------------
-    py::enum_<SilKit::Services::TransmitDirection>(m, "TransmitDirection", py::arithmetic())
+    py::native_enum<SilKit::Services::TransmitDirection>(m, "TransmitDirection", "enum.IntFlag")
         .value("Undefined", SilKit::Services::TransmitDirection::Undefined)
         .value("RX",        SilKit::Services::TransmitDirection::RX)
         .value("TX",        SilKit::Services::TransmitDirection::TX)
-        .value("TXRX",      SilKit::Services::TransmitDirection::TXRX);
+        .value("TXRX",      SilKit::Services::TransmitDirection::TXRX).finalize();
 
     py::enum_<SilKit::Services::Can::CanControllerState>(m, "CanControllerState")
         .value("Uninit",  SilKit::Services::Can::CanControllerState::Uninit)
@@ -29,19 +31,19 @@ void bind_ICanController(py::module_ &m)
         .value("ErrorPassive", SilKit::Services::Can::CanErrorState::ErrorPassive)
         .value("BusOff",       SilKit::Services::Can::CanErrorState::BusOff);
 
-    py::enum_<SilKit::Services::Can::CanFrameFlag>(m, "CanFrameFlag", py::arithmetic())
+    py::native_enum<SilKit::Services::Can::CanFrameFlag>(m, "CanFrameFlag", "enum.IntFlag")
         .value("Ide", SilKit::Services::Can::CanFrameFlag::Ide)
         .value("Rtr", SilKit::Services::Can::CanFrameFlag::Rtr)
         .value("Fdf", SilKit::Services::Can::CanFrameFlag::Fdf)
         .value("Brs", SilKit::Services::Can::CanFrameFlag::Brs)
         .value("Esi", SilKit::Services::Can::CanFrameFlag::Esi)
         .value("Xlf", SilKit::Services::Can::CanFrameFlag::Xlf)
-        .value("Sec", SilKit::Services::Can::CanFrameFlag::Sec);
+        .value("Sec", SilKit::Services::Can::CanFrameFlag::Sec).finalize();
 
-    py::enum_<SilKit::Services::Can::CanTransmitStatus>(m, "CanTransmitStatus", py::arithmetic())
+    py::native_enum<SilKit::Services::Can::CanTransmitStatus>(m, "CanTransmitStatus", "enum.IntFlag")
         .value("Transmitted",       SilKit::Services::Can::CanTransmitStatus::Transmitted)
         .value("Canceled",          SilKit::Services::Can::CanTransmitStatus::Canceled)
-        .value("TransmitQueueFull", SilKit::Services::Can::CanTransmitStatus::TransmitQueueFull);
+        .value("TransmitQueueFull", SilKit::Services::Can::CanTransmitStatus::TransmitQueueFull).finalize();
 
     m.attr("CanTransmitStatus_DefaultMask") = py::int_(SilKit_CanTransmitStatus_DefaultMask);
 
@@ -51,6 +53,9 @@ void bind_ICanController(py::module_ &m)
     .def_readonly("can_id", &SilKit::Services::Can::CanFrame::canId)
     .def_readonly("flags", &SilKit::Services::Can::CanFrame::flags)
     .def_readonly("dlc", &SilKit::Services::Can::CanFrame::dlc)
+    .def_readonly("sdt", &SilKit::Services::Can::CanFrame::sdt)
+    .def_readonly("vcid", &SilKit::Services::Can::CanFrame::vcid)
+    .def_readonly("af", &SilKit::Services::Can::CanFrame::af)
     .def_property_readonly("data",
         [](const SilKit::Services::Can::CanFrame& f) {
             return py::bytes(
@@ -58,22 +63,30 @@ void bind_ICanController(py::module_ &m)
                 f.dataField.size());
         });
 
-    py::class_<SilKit::Services::Can::CanFrameEvent>(m, "CanFrameEvent")
+    py::class_<SilKit::Services::Can::CanFrameEvent,
+        std::shared_ptr<SilKit::Services::Can::CanFrameEvent>>(m, "CanFrameEvent")
         .def_property_readonly("timestamp", [](const SilKit::Services::Can::CanFrameEvent& event) {
             return event.timestamp.count();
         }, "Timestamp in nanoseconds")
         .def_readonly("frame", &SilKit::Services::Can::CanFrameEvent::frame)
         .def_readonly("direction", &SilKit::Services::Can::CanFrameEvent::direction)
-        .def_readonly("user_context", &SilKit::Services::Can::CanFrameEvent::userContext);
+        .def_property_readonly("user_context", [](const SilKit::Services::Can::CanFrameEvent& event) {
+            return reinterpret_cast<uintptr_t>(event.userContext);
+        });
 
-    py::class_<SilKit::Services::Can::ICanController, py::smart_holder>(m, "ICanController")
+    py::class_<SilKit::Services::Can::ICanController, py::smart_holder>(m, "ICanController", py::dynamic_attr())
         .def("set_baud_rate",
             &SilKit::Services::Can::ICanController::SetBaudRate,
-            py::arg("rate"), py::arg("fd_rate"), py::arg("xl_rate"))
-        .def("reset", &SilKit::Services::Can::ICanController::Reset)
-        .def("start", &SilKit::Services::Can::ICanController::Start)
-        .def("stop", &SilKit::Services::Can::ICanController::Stop)
-        .def("sleep", &SilKit::Services::Can::ICanController::Sleep)
+            py::arg("rate"), py::arg("fd_rate"), py::arg("xl_rate"),
+            py::call_guard<py::gil_scoped_release>())
+        .def("reset", &SilKit::Services::Can::ICanController::Reset,
+            py::call_guard<py::gil_scoped_release>())
+        .def("start", &SilKit::Services::Can::ICanController::Start,
+            py::call_guard<py::gil_scoped_release>())
+        .def("stop", &SilKit::Services::Can::ICanController::Stop,
+            py::call_guard<py::gil_scoped_release>())
+        .def("sleep", &SilKit::Services::Can::ICanController::Sleep,
+            py::call_guard<py::gil_scoped_release>())
         .def("send_frame",
             [](SilKit::Services::Can::ICanController& self,
             uint32_t can_id,
@@ -125,29 +138,29 @@ void bind_ICanController(py::module_ &m)
             py::arg("af") = 0u,
             py::arg("user_context") = 0u)
         .def("add_frame_handler",
-            [](SilKit::Services::Can::ICanController& self,
+            [](py::object self,
             py::function py_handler,
             SilKit::Services::DirectionMask direction_mask)
             {
-                py::function handler_copy = py_handler;
-  
-                auto id = self.AddFrameHandler( [handler_copy](SilKit::Services::Can::ICanController* ctrl,
-                                const SilKit::Services::Can::CanFrameEvent& evt)
-                    {
-                        py::gil_scoped_acquire gil;
-                        try { 
-                            handler_copy(ctrl, evt);
-                        }
-                        catch (const py::error_already_set& e) 
-                        { 
-                            PyErr_WriteUnraisable(e.value().ptr()); 
-                        }
-                    },direction_mask);
-
-                return py::int_(static_cast<std::uint64_t>(id));
+                auto* controller = self.cast<SilKit::Services::Can::ICanController*>();
+                SilKitPy::CallbackRegistration registration(self, std::move(py_handler));
+                SilKit::Util::HandlerId id;
+                {
+                    auto handler = registration.callback();
+                    py::gil_scoped_release release;
+                    id = controller->AddFrameHandler(std::move(handler), direction_mask);
+                }
+                registration.commit(SilKitPy::CallbackKey(controller, "frame", static_cast<uint64_t>(id)));
+                return static_cast<uint64_t>(id);
             },
             py::arg("handler"),
             py::arg("direction_mask") =
-                static_cast<SilKit::Services::DirectionMask>(SilKit::Services::TransmitDirection::RX));
+                static_cast<SilKit::Services::DirectionMask>(SilKit::Services::TransmitDirection::RX))
+        .def("remove_frame_handler", [](py::object self, uint64_t id) {
+            auto* controller = self.cast<SilKit::Services::Can::ICanController*>();
+            { py::gil_scoped_release release; controller->RemoveFrameHandler(static_cast<SilKit::Util::HandlerId>(id)); }
+            auto callbacks = SilKitPy::CallbackRegistry(SilKitPy::ParticipantOwner(self));
+            callbacks.attr("pop")(SilKitPy::CallbackKey(controller, "frame", id), py::none());
+        }, py::arg("handler_id"));
     }
 

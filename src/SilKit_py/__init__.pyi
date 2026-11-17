@@ -83,6 +83,7 @@ class ILifecycleService:
     def set_communication_ready_handler_async(self, communication_ready_handler: CommunicationReadyHandler ) -> None: ...
     def complete_communication_ready_handler_async(self) -> None: ...
     def start_lifecycle(self) -> Awaitable[ParticipantState]:
+        """Start the lifecycle. Cancellation cancels waiting, not the simulation."""
         ...
     def stop(self, reason:str):
         ...
@@ -179,11 +180,8 @@ class CanFrame:
     vcid: int            # uint8_t vcid :contentReference[oaicite:4]{index=4}
     af: int              # uint32_t af :contentReference[oaicite:5]{index=5}
 
-    def __init__(self) -> None: ...
     @property
     def data(self) -> bytes: ...
-    @data.setter
-    def data(self, b: bytes) -> None: ...
 
 class TransmitDirection(enum.IntFlag):
     Undefined: TransmitDirection
@@ -234,7 +232,7 @@ class CanFrameEvent:
     timestamp: int          # std::chrono::nanoseconds :contentReference[oaicite:11]{index=11}
     frame: CanFrame         # :contentReference[oaicite:12]{index=12}
     direction: TransmitDirection  # :contentReference[oaicite:13]{index=13}
-    userContext: int        # void* :contentReference[oaicite:14]{index=14}
+    user_context: int
 
 
 class ICanController:
@@ -261,6 +259,7 @@ class ICanController:
         handler: Callable[[ICanController, CanFrameEvent], Any],
         direction_mask: DirectionMask = ...,
     ) -> HandlerId: ...
+    def remove_frame_handler(self, handler_id: HandlerId) -> None: ...
 # CAN controller concepts and data structures :contentReference[oaicite:15]{index=15}
 
 class RpcCallStatus(enum.IntFlag):
